@@ -54,7 +54,7 @@ importers:
       '@tanstack/router-plugin':
         specifier: ^1.132.0
         version: 1.163.2(@tanstack/react-router@1.163.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(vite@7.3.2(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0))
-      '@workspace/ui':
+      '@skills-browser/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
