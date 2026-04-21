@@ -1,0 +1,1 @@
+{"$schema": "https://oxc.dev/config-1.schema.json", "plugins": {"@typescript-eslint": { "recommended-type-checked": true }, "react": { recommended: true, "react-in-jsx-scope": "off" }, "react-hooks": true}, "settings": {"react": {"version": "detect"}}, "rules": {"no-unused-vars": "error", "@typescript-eslint/no-unused-vars": "off", "@typescript-eslint/no-explicit-any": "warn"}}
