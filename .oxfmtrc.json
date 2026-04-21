@@ -20,6 +20,8 @@
     ".vinxi/",
     "coverage/",
     "pnpm-lock.yaml",
-    ".pnpm-store/"
+    ".pnpm-store/",
+    "apps/web/src/routeTree.gen.ts",
+    "src/routeTree.gen.ts"
   ]
 }

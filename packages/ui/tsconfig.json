@@ -10,7 +10,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@workspace/ui/*": ["./src/*"]
+      "@skills-browser/ui/*": ["./src/*"]
     }
   },
   "include": ["."],
