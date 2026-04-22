@@ -1,5 +1,7 @@
 import type {
   DashboardPayload,
+  InstallSkillsRequest,
+  InstallSkillsResponse,
   InstalledSkillsState,
   SearchPayload,
   SkillsCommandResult,
@@ -117,6 +119,32 @@ const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResp
   return payload as UpdateSkillsResponse;
 };
 
+const parseInstallResponse = async (response: Response): Promise<InstallSkillsResponse> => {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    if (isRecord(payload) && typeof payload.error === 'string') {
+      throw new Error(payload.error);
+    }
+
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+  if (!isRecord(payload)) {
+    throw new Error('Invalid install response.');
+  }
+
+  if (!isRecord(payload.payload) || !isCommandResult(payload.command)) {
+    throw new Error('Invalid install response.');
+  }
+
+  if (payload.scope !== 'project' && payload.scope !== 'global') {
+    throw new Error('Invalid install response.');
+  }
+
+  return payload as InstallSkillsResponse;
+};
+
 export const fetchDashboardState = async (): Promise<DashboardPayload> => {
   const response = await fetch('/api/dashboard', {
     method: 'GET',
@@ -164,6 +192,28 @@ export const updateDashboardSkills = async (
   });
 
   return parseUpdateResponse(response);
+};
+
+export const installDashboardSkills = async (
+  input: InstallSkillsRequest
+): Promise<InstallSkillsResponse> => {
+  const response = await fetch('/api/dashboard/install', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      source: input.source,
+      scope: input.scope,
+      agents: input.agents,
+      skills: input.skills,
+      copy: input.copy,
+      previousState: input.previousState,
+    }),
+  });
+
+  return parseInstallResponse(response);
 };
 
 export const refreshDashboardState = async (

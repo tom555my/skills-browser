@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type {
   DashboardPayload,
+  InstallSkillsResponse,
   InstalledSkillsScopeState,
   InstalledSkillsState,
   SkillsCommandResult,
@@ -11,9 +12,13 @@ import type {
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
 import { loadSearchSkillsState } from './search-skills-state';
-import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
+import {
+  createSkillsCommandAdapter,
+  type SkillsCommandAdapter,
+  type InstallSkillOptions,
+} from './skills-command-adapter';
 
-type CommandAdapter = Pick<SkillsCommandAdapter, 'removeSkills' | 'updateSkills'>;
+type CommandAdapter = Pick<SkillsCommandAdapter, 'installSkill' | 'removeSkills' | 'updateSkills'>;
 
 type CreateHonoAppOptions = {
   commandAdapter?: CommandAdapter;
@@ -92,6 +97,11 @@ type RemoveDashboardRequest = {
   previousState?: InstalledSkillsState;
 };
 
+type InstallDashboardRequest = InstallSkillOptions & {
+  scope: SkillScope;
+  previousState?: InstalledSkillsState;
+};
+
 const getUpdateDashboardRequest = (value: unknown): UpdateSkillsRequest | null => {
   if (!isRecord(value) || !isScope(value.scope)) {
     return null;
@@ -132,6 +142,26 @@ const getRemoveDashboardRequest = (value: unknown): RemoveDashboardRequest | nul
     names,
     scope: value.scope,
     agents: normalizeStringArray(value.agents),
+    previousState: getPreviousState(value),
+  };
+};
+
+const getInstallDashboardRequest = (value: unknown): InstallDashboardRequest | null => {
+  if (!isRecord(value) || !isScope(value.scope) || typeof value.source !== 'string') {
+    return null;
+  }
+
+  const source = value.source.trim();
+  if (source.length === 0) {
+    return null;
+  }
+
+  return {
+    source,
+    scope: value.scope,
+    agents: normalizeStringArray(value.agents),
+    skills: normalizeStringArray(value.skills),
+    copy: value.copy === true,
     previousState: getPreviousState(value),
   };
 };
@@ -187,6 +217,7 @@ const createDashboardPayload = async (options: {
 
 export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
   const commandAdapter: CommandAdapter = {
+    installSkill: options.commandAdapter?.installSkill ?? defaultCommandAdapter.installSkill,
     removeSkills: options.commandAdapter?.removeSkills ?? defaultCommandAdapter.removeSkills,
     updateSkills:
       options.commandAdapter?.updateSkills ??
@@ -257,6 +288,48 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       command,
       scope: request.scope,
     });
+  });
+
+  app.post('/api/dashboard/install', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const request = getInstallDashboardRequest(body);
+
+    if (!request) {
+      return context.json(
+        {
+          error:
+            'Invalid install payload. Provide source, scope ("project" or "global"), and optional agent or skill arrays.',
+        },
+        400
+      );
+    }
+
+    const command = await commandAdapter.installSkill({
+      source: request.source,
+      scope: request.scope,
+      agents: request.agents,
+      skills: request.skills,
+      copy: request.copy,
+    });
+
+    const payload = await createDashboardPayload({
+      loadInstalledState,
+      previousState: request.previousState,
+    });
+    const scopeState = payload.installedState[request.scope];
+    payload.installedState[request.scope] = {
+      ...scopeState,
+      command,
+      error: command.ok ? scopeState.error : createOperationFailureMessage(command),
+    };
+
+    const response: InstallSkillsResponse = {
+      payload,
+      command,
+      scope: request.scope,
+    };
+
+    return context.json(response);
   });
 
   app.post('/api/dashboard/update', async (context) => {

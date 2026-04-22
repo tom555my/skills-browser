@@ -114,10 +114,7 @@ export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkil
       }
 
       const args = ['add', source];
-
-      if (options.scope === 'global') {
-        args.push('--global');
-      }
+      appendScopeFlag(args, options.scope);
 
       appendMultiValueFlag(args, '--agent', options.agents);
       appendMultiValueFlag(args, '--skill', options.skills);

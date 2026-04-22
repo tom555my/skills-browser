@@ -30,6 +30,7 @@ import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router'
 
 import type {
   DashboardPayload,
+  InstallSkillsResponse,
   InstalledSkillsScopeState,
   InstalledSkillsState,
   SearchResultSkill,
@@ -40,6 +41,7 @@ import type {
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
 import {
   fetchDashboardState,
+  installDashboardSkills,
   refreshDashboardState,
   removeInstalledSkills,
   searchSkills,
@@ -69,6 +71,13 @@ type RemoveOutcome = {
   status: 'success' | 'failure';
   scope: SkillScope;
   names: string[];
+  command: SkillsCommandResult;
+};
+
+type InstallOutcome = {
+  status: 'success' | 'failure';
+  source: string;
+  scope: SkillScope;
   command: SkillsCommandResult;
 };
 
@@ -106,7 +115,7 @@ export function RootLayout() {
 }
 
 export function BrowsePage() {
-  const { payload, skills, isInitialLoading, errorMessage, reload } = useDashboardData();
+  const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [sourceFilter, setSourceFilter] = useState('all');
@@ -119,6 +128,17 @@ export function BrowsePage() {
   const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
   const [searchParseWarning, setSearchParseWarning] = useState<string | null>(null);
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
+  const [installSource, setInstallSource] = useState('');
+  const [installScope, setInstallScope] = useState<SkillScope>('project');
+  const [installAgentsInput, setInstallAgentsInput] = useState('');
+  const [installSkillsInput, setInstallSkillsInput] = useState('');
+  const [installCopy, setInstallCopy] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [installStatus, setInstallStatus] = useState<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [installOutcome, setInstallOutcome] = useState<InstallOutcome | null>(null);
 
   const sourceOptions = useMemo(() => {
     const values = new Set<string>();
@@ -256,6 +276,82 @@ export function BrowsePage() {
     }
   };
 
+  const applySearchResultSource = (source: string) => {
+    setInstallSource(source);
+    setInstallStatus(null);
+  };
+
+  const handleInstall = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!payload) {
+      return;
+    }
+
+    const source = installSource.trim();
+    if (source.length === 0 || isInstalling) {
+      setInstallStatus({
+        tone: 'error',
+        message: 'Skill source is required.',
+      });
+      return;
+    }
+
+    setIsInstalling(true);
+    setInstallStatus(null);
+
+    let response: InstallSkillsResponse;
+    try {
+      response = await installDashboardSkills({
+        source,
+        scope: installScope,
+        agents: parseCommaSeparatedValues(installAgentsInput),
+        skills: parseCommaSeparatedValues(installSkillsInput),
+        copy: installCopy,
+        previousState: payload.installedState,
+      });
+    } catch (error) {
+      setInstallStatus({
+        tone: 'error',
+        message: `Install request failed: ${getErrorMessage(error)}`,
+      });
+      setIsInstalling(false);
+      return;
+    }
+
+    const status = response.command.ok ? 'success' : 'failure';
+    setInstallOutcome({
+      status,
+      source,
+      scope: installScope,
+      command: response.command,
+    });
+
+    if (!response.command.ok) {
+      setInstallStatus({
+        tone: 'error',
+        message: createCommandFailureMessage(response.command),
+      });
+      setIsInstalling(false);
+      return;
+    }
+
+    setInstallStatus({
+      tone: 'success',
+      message: `Installed "${source}" in ${scopeLabel(installScope)} scope.`,
+    });
+
+    try {
+      await refresh();
+    } catch (error) {
+      setInstallStatus({
+        tone: 'error',
+        message: `Install succeeded but refresh failed: ${getErrorMessage(error)}`,
+      });
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
   if (isInitialLoading && !payload) {
     return <PageLoadingState />;
   }
@@ -384,6 +480,13 @@ export function BrowsePage() {
                       <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono">
                         npx skills add {result.source}
                       </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applySearchResultSource(result.source)}
+                      >
+                        Install
+                      </Button>
                       {result.url ? (
                         <a
                           href={result.url}
@@ -409,6 +512,134 @@ export function BrowsePage() {
       </Card>
 
       <SearchCommandOutputCard command={searchCommand} />
+
+      <Card className="border shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base">Install Skill</CardTitle>
+          <CardDescription>
+            Run `npx skills add` from a manual source or a selected search result.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form className="space-y-4" onSubmit={(event) => void handleInstall(event)}>
+            <div className="space-y-1.5">
+              <label htmlFor="install-source" className="text-sm font-medium">
+                Source
+              </label>
+              <input
+                id="install-source"
+                value={installSource}
+                onChange={(event) => setInstallSource(event.target.value)}
+                placeholder="owner/repo@skill-name"
+                disabled={isInstalling}
+                className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <label htmlFor="install-scope" className="text-sm font-medium">
+                  Scope
+                </label>
+                <select
+                  id="install-scope"
+                  value={installScope}
+                  disabled={isInstalling}
+                  onChange={(event) =>
+                    setInstallScope(event.target.value === 'global' ? 'global' : 'project')
+                  }
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                >
+                  <option value="project">Project</option>
+                  <option value="global">Global</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="install-agents" className="text-sm font-medium">
+                  Target agents
+                </label>
+                <input
+                  id="install-agents"
+                  value={installAgentsInput}
+                  onChange={(event) => setInstallAgentsInput(event.target.value)}
+                  placeholder="codex, claude"
+                  disabled={isInstalling}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                />
+                <p className="text-xs text-muted-foreground">Optional comma-separated `--agent`.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="install-skills" className="text-sm font-medium">
+                  Skill filters
+                </label>
+                <input
+                  id="install-skills"
+                  value={installSkillsInput}
+                  onChange={(event) => setInstallSkillsInput(event.target.value)}
+                  placeholder="do-it, adapt"
+                  disabled={isInstalling}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                />
+                <p className="text-xs text-muted-foreground">Optional comma-separated `--skill`.</p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={installCopy}
+                disabled={isInstalling}
+                onChange={(event) => setInstallCopy(event.target.checked)}
+                className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+              />
+              <span>Use `--copy`</span>
+            </label>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isInstalling}
+                onClick={() => {
+                  setInstallSource('');
+                  setInstallAgentsInput('');
+                  setInstallSkillsInput('');
+                  setInstallCopy(false);
+                  setInstallStatus(null);
+                }}
+              >
+                Clear
+              </Button>
+              <Button type="submit" size="sm" disabled={isInstalling}>
+                {isInstalling ? 'Installing...' : 'Install'}
+              </Button>
+            </div>
+          </form>
+
+          {installStatus ? (
+            <StatusBanner
+              className={
+                installStatus.tone === 'error'
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : 'border-emerald-500/40 bg-emerald-500/5'
+              }
+              icon={
+                installStatus.tone === 'error' ? (
+                  <X className="size-4 text-destructive" />
+                ) : (
+                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                )
+              }
+              message={installStatus.message}
+            />
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {installOutcome ? <InstallOperationCard outcome={installOutcome} /> : null}
 
       <Card className="border shadow-none">
         <CardContent className="space-y-3">
@@ -1779,6 +2010,42 @@ function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
         </CardTitle>
         <CardDescription>
           Removed {names.length} skill{names.length === 1 ? '' : 's'} from {scopeLabel(scope)} scope
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+            {command.command.join(' ')}
+          </code>
+          <Badge variant={status === 'success' ? 'secondary' : 'destructive'}>
+            {status === 'success' ? 'Succeeded' : 'Failed'}
+          </Badge>
+        </div>
+
+        {command.stdout.trim() ? (
+          <OutputBlock label="stdout" value={command.stdout} />
+        ) : (
+          <p className="text-xs text-muted-foreground">No stdout output.</p>
+        )}
+
+        {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InstallOperationCard(props: { outcome: InstallOutcome }) {
+  const { command, source, scope, status } = props.outcome;
+
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TerminalSquare className="size-4" />
+          Install Command Output
+        </CardTitle>
+        <CardDescription>
+          Installed {source} in {scopeLabel(scope)} scope
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

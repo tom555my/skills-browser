@@ -58,6 +58,25 @@ describe('skills command adapter argument construction', () => {
     ]);
   });
 
+  it('builds install command args for project scope', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.installSkill({
+      source: 'owner/repo',
+      scope: 'project',
+      agents: ['codex'],
+      skills: ['do-it'],
+    });
+
+    expect(calls).toEqual([
+      ['add', 'owner/repo', '--project', '--agent', 'codex', '--skill', 'do-it'],
+    ]);
+  });
+
   it('builds remove command args', async () => {
     const calls: string[][] = [];
     const adapter = createSkillsCommandAdapter(async (args) => {

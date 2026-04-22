@@ -155,7 +155,7 @@ Depend On:
 
 ## Ticket SB-007
 
-Status: Not Started
+Status: Done
 
 Title: Implement Install Flow
 

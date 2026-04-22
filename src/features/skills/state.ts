@@ -60,3 +60,18 @@ export type UpdateSkillsResponse = {
   scope: SkillScope;
   command: SkillsCommandResult;
 };
+
+export type InstallSkillsRequest = {
+  source: string;
+  scope: SkillScope;
+  agents?: string[];
+  skills?: string[];
+  copy?: boolean;
+  previousState?: InstalledSkillsState;
+};
+
+export type InstallSkillsResponse = {
+  payload: DashboardPayload;
+  command: SkillsCommandResult;
+  scope: SkillScope;
+};

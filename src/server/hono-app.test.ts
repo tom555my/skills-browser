@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { SkillsCommandResult } from '../features/skills/state';
+import type { InstalledSkillsState, SkillsCommandResult } from '../features/skills/state';
 import { createHonoApp } from './hono-app';
 
 const createCommandResult = (
@@ -14,6 +14,27 @@ const createCommandResult = (
     stderr: '',
     exitCode: 0,
     ...overrides,
+  };
+};
+
+const createInstalledState = (): InstalledSkillsState => {
+  return {
+    project: {
+      scope: 'project',
+      skills: [],
+      command: null,
+      error: null,
+      stale: false,
+      lastSuccessfulAt: '2026-01-01T00:00:00.000Z',
+    },
+    global: {
+      scope: 'global',
+      skills: [],
+      command: null,
+      error: null,
+      stale: false,
+      lastSuccessfulAt: '2026-01-01T00:00:00.000Z',
+    },
   };
 };
 
@@ -104,5 +125,83 @@ describe('dashboard update route', () => {
 
     expect(invalidScopeResponse.status).toBe(400);
     expect(invalidNamesResponse.status).toBe(400);
+  });
+});
+
+describe('dashboard install route', () => {
+  it('runs install with source, scope, agents, and skills', async () => {
+    const calls: unknown[] = [];
+    const app = createHonoApp({
+      commandAdapter: {
+        installSkill: async (options) => {
+          calls.push(options);
+          return createCommandResult([
+            'add',
+            'owner/repo@skill',
+            '--global',
+            '--agent',
+            'codex',
+            '--skill',
+            'do-it',
+          ]);
+        },
+        removeSkills: async () => createCommandResult(['remove']),
+        updateSkills: async () => createCommandResult(['update']),
+      },
+      loadInstalledState: async () => createInstalledState(),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/dashboard/install', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: ' owner/repo@skill ',
+          scope: 'global',
+          agents: [' codex '],
+          skills: [' do-it '],
+          previousState: createInstalledState(),
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        source: 'owner/repo@skill',
+        scope: 'global',
+        agents: ['codex'],
+        skills: ['do-it'],
+        copy: false,
+      },
+    ]);
+  });
+
+  it('rejects invalid install payloads', async () => {
+    const app = createHonoApp({
+      commandAdapter: {
+        installSkill: async () => createCommandResult(['add']),
+        removeSkills: async () => createCommandResult(['remove']),
+        updateSkills: async () => createCommandResult(['update']),
+      },
+      loadInstalledState: async () => createInstalledState(),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/dashboard/install', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: ' ',
+          scope: 'project',
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
   });
 });
