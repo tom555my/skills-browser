@@ -8,6 +8,7 @@ import type {
 } from '../features/skills/state';
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
+import { loadSearchSkillsState } from './search-skills-state';
 import { createSkillsCommandAdapter } from './skills-command-adapter';
 
 const getLaunchDirectory = () => {
@@ -121,6 +122,23 @@ const createOperationFailureMessage = (result: SkillsCommandResult): string => {
 
 const skillsCommandAdapter = createSkillsCommandAdapter();
 
+const getSearchQuery = (value: unknown): string | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.query !== 'string') {
+    return undefined;
+  }
+
+  const query = value.query.trim();
+  if (query.length === 0) {
+    return undefined;
+  }
+
+  return query;
+};
+
 const createDashboardPayload = async (
   previousState?: InstalledSkillsState
 ): Promise<DashboardPayload> => {
@@ -182,5 +200,18 @@ honoApp.post('/api/dashboard/remove', async (context) => {
     payload,
     command,
     scope: request.scope,
+  });
+});
+
+honoApp.post('/api/search', async (context) => {
+  const body = await context.req.json().catch(() => undefined);
+  const query = getSearchQuery(body);
+
+  if (!query) {
+    return context.json({ error: 'Search query is required.' }, 400);
+  }
+
+  return context.json({
+    searchState: await loadSearchSkillsState(query),
   });
 });

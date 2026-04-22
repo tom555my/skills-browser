@@ -1,6 +1,7 @@
 import type {
   DashboardPayload,
   InstalledSkillsState,
+  SearchPayload,
   SkillsCommandResult,
 } from '../features/skills/state';
 import type { SkillScope } from '../features/skills/types';
@@ -64,6 +65,20 @@ const parseRemoveInstalledSkillsResponse = async (
   return payload as RemoveInstalledSkillsResponse;
 };
 
+const parseSearchPayload = async (response: Response): Promise<SearchPayload> => {
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid API response.');
+  }
+
+  return payload as SearchPayload;
+};
+
 export const fetchDashboardState = async (): Promise<DashboardPayload> => {
   const response = await fetch('/api/dashboard', {
     method: 'GET',
@@ -110,4 +125,19 @@ export const refreshDashboardState = async (
   });
 
   return parseDashboardPayload(response);
+};
+
+export const searchSkills = async (query: string): Promise<SearchPayload> => {
+  const response = await fetch('/api/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+    }),
+  });
+
+  return parseSearchPayload(response);
 };

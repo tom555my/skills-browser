@@ -130,7 +130,7 @@ Depend On:
 
 ## Ticket SB-006
 
-Status: Not Started
+Status: Done
 
 Title: Implement Search Flow
 
