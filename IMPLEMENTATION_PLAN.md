@@ -130,7 +130,7 @@ Depend On:
 
 ## Ticket SB-006
 
-Status: Not Started
+Status: Done
 
 Title: Implement Search Flow
 
@@ -183,7 +183,7 @@ Depend On:
 
 ## Ticket SB-008
 
-Status: Not Started
+Status: Completed
 
 Title: Implement Remove Flow
 

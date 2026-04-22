@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "NODE_ENV=development bun run src/cli.ts start",
     "start": "NODE_ENV=production bun run src/cli.ts start",
-    "build": "bun run build:font && bun build --compile ./src/cli.ts --outfile ./dist/skills-browser",
+    "build": "bun build --compile ./src/cli.ts --outfile ./dist/skills-browser",
     "test": "bun test",
     "lint": "oxlint src",
     "format": "oxfmt \"src/**/*.{ts,tsx}\"",

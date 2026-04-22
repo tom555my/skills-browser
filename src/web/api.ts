@@ -1,13 +1,29 @@
 import type {
   DashboardPayload,
   InstalledSkillsState,
+  SearchPayload,
   SkillsCommandResult,
   UpdateSkillsRequest,
   UpdateSkillsResponse,
 } from '../features/skills/state';
+import type { SkillScope } from '../features/skills/types';
 
 const getErrorMessage = (response: Response): string => {
   return `Request failed (${response.status} ${response.statusText})`;
+};
+
+const parseDashboardPayload = async (response: Response): Promise<DashboardPayload> => {
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid API response.');
+  }
+
+  return payload as DashboardPayload;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -28,7 +44,44 @@ const isCommandResult = (value: unknown): value is SkillsCommandResult => {
   );
 };
 
-const parseDashboardPayload = async (response: Response): Promise<DashboardPayload> => {
+export type RemoveInstalledSkillsInput = {
+  names: string[];
+  scope: SkillScope;
+  agents?: string[];
+  previousState?: InstalledSkillsState;
+};
+
+export type RemoveInstalledSkillsResponse = {
+  payload: DashboardPayload;
+  command: SkillsCommandResult;
+  scope: SkillScope;
+};
+
+const parseRemoveInstalledSkillsResponse = async (
+  response: Response
+): Promise<RemoveInstalledSkillsResponse> => {
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+
+  if (!isRecord(payload)) {
+    throw new Error('Invalid remove response.');
+  }
+
+  if (!isRecord(payload.payload) || !isRecord(payload.command)) {
+    throw new Error('Invalid remove response.');
+  }
+
+  if (payload.scope !== 'project' && payload.scope !== 'global') {
+    throw new Error('Invalid remove response.');
+  }
+
+  return payload as RemoveInstalledSkillsResponse;
+};
+
+const parseSearchPayload = async (response: Response): Promise<SearchPayload> => {
   if (!response.ok) {
     throw new Error(getErrorMessage(response));
   }
@@ -39,7 +92,7 @@ const parseDashboardPayload = async (response: Response): Promise<DashboardPaylo
     throw new Error('Invalid API response.');
   }
 
-  return payload as DashboardPayload;
+  return payload as SearchPayload;
 };
 
 const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResponse> => {
@@ -54,11 +107,11 @@ const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResp
 
   const payload = await response.json();
   if (!isRecord(payload) || (payload.scope !== 'project' && payload.scope !== 'global')) {
-    throw new Error('Invalid API response.');
+    throw new Error('Invalid update response.');
   }
 
   if (!isCommandResult(payload.command)) {
-    throw new Error('Invalid API response.');
+    throw new Error('Invalid update response.');
   }
 
   return payload as UpdateSkillsResponse;
@@ -75,8 +128,28 @@ export const fetchDashboardState = async (): Promise<DashboardPayload> => {
   return parseDashboardPayload(response);
 };
 
+export const removeInstalledSkills = async (
+  input: RemoveInstalledSkillsInput
+): Promise<RemoveInstalledSkillsResponse> => {
+  const response = await fetch('/api/dashboard/remove', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      names: input.names,
+      scope: input.scope,
+      agents: input.agents,
+      previousState: input.previousState,
+    }),
+  });
+
+  return parseRemoveInstalledSkillsResponse(response);
+};
+
 export const updateDashboardSkills = async (
-  request: UpdateSkillsRequest
+  input: UpdateSkillsRequest
 ): Promise<UpdateSkillsResponse> => {
   const response = await fetch('/api/dashboard/update', {
     method: 'POST',
@@ -84,7 +157,10 @@ export const updateDashboardSkills = async (
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify({
+      scope: input.scope,
+      names: input.names,
+    }),
   });
 
   return parseUpdateResponse(response);
@@ -105,4 +181,19 @@ export const refreshDashboardState = async (
   });
 
   return parseDashboardPayload(response);
+};
+
+export const searchSkills = async (query: string): Promise<SearchPayload> => {
+  const response = await fetch('/api/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+    }),
+  });
+
+  return parseSearchPayload(response);
 };

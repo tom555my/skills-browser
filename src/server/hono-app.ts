@@ -4,18 +4,22 @@ import type {
   DashboardPayload,
   InstalledSkillsScopeState,
   InstalledSkillsState,
+  SkillsCommandResult,
   UpdateSkillsRequest,
   UpdateSkillsResponse,
 } from '../features/skills/state';
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
-import { skillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
+import { loadSearchSkillsState } from './search-skills-state';
+import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
 
-type UpdateSkillsAdapter = Pick<SkillsCommandAdapter, 'updateSkills'>;
+type CommandAdapter = Pick<SkillsCommandAdapter, 'removeSkills' | 'updateSkills'>;
 
 type CreateHonoAppOptions = {
-  updateAdapter?: UpdateSkillsAdapter;
-  loadState?: typeof loadInstalledSkillsState;
+  commandAdapter?: CommandAdapter;
+  updateAdapter?: Pick<SkillsCommandAdapter, 'updateSkills'>;
+  loadInstalledState?: typeof loadInstalledSkillsState;
+  loadSearchState?: typeof loadSearchSkillsState;
 };
 
 const getLaunchDirectory = () => {
@@ -31,7 +35,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-const isSkillScope = (value: unknown): value is SkillScope => {
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+};
+
+const isScope = (value: unknown): value is SkillScope => {
   return value === 'project' || value === 'global';
 };
 
@@ -71,33 +85,26 @@ const getPreviousState = (value: unknown): InstalledSkillsState | undefined => {
   return previousState;
 };
 
-const normalizeSkillNames = (value: unknown): string[] | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!Array.isArray(value)) {
-    return null;
-  }
-
-  const names = value
-    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-    .filter((entry) => entry.length > 0);
-
-  if (names.length === 0) {
-    return null;
-  }
-
-  return names;
+type RemoveDashboardRequest = {
+  names: string[];
+  scope: SkillScope;
+  agents: string[];
+  previousState?: InstalledSkillsState;
 };
 
-const getUpdateRequest = (value: unknown): UpdateSkillsRequest | null => {
-  if (!isRecord(value) || !isSkillScope(value.scope)) {
+const getUpdateDashboardRequest = (value: unknown): UpdateSkillsRequest | null => {
+  if (!isRecord(value) || !isScope(value.scope)) {
     return null;
   }
 
-  const names = normalizeSkillNames(value.names);
-  if (names === null) {
+  if (!('names' in value)) {
+    return {
+      scope: value.scope,
+    };
+  }
+
+  const names = normalizeStringArray(value.names);
+  if (names.length === 0) {
     return null;
   }
 
@@ -107,22 +114,87 @@ const getUpdateRequest = (value: unknown): UpdateSkillsRequest | null => {
   };
 };
 
-const createDashboardPayload = async (
-  loadState: typeof loadInstalledSkillsState,
-  previousState?: InstalledSkillsState
-): Promise<DashboardPayload> => {
+const getRemoveDashboardRequest = (value: unknown): RemoveDashboardRequest | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (!isScope(value.scope)) {
+    return null;
+  }
+
+  const names = normalizeStringArray(value.names);
+  if (names.length === 0) {
+    return null;
+  }
+
+  return {
+    names,
+    scope: value.scope,
+    agents: normalizeStringArray(value.agents),
+    previousState: getPreviousState(value),
+  };
+};
+
+const createOperationFailureMessage = (result: SkillsCommandResult): string => {
+  const exitCode = result.exitCode === null ? 'unknown' : String(result.exitCode);
+  const command = result.command.join(' ');
+  const stderr = result.stderr.trim();
+  const stdout = result.stdout.trim();
+
+  if (stderr.length > 0) {
+    return `Command "${command}" failed (exit code ${exitCode}): ${stderr}`;
+  }
+
+  if (stdout.length > 0) {
+    return `Command "${command}" failed (exit code ${exitCode}): ${stdout}`;
+  }
+
+  return `Command "${command}" failed (exit code ${exitCode}).`;
+};
+
+const defaultCommandAdapter = createSkillsCommandAdapter();
+
+const getSearchQuery = (value: unknown): string | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.query !== 'string') {
+    return undefined;
+  }
+
+  const query = value.query.trim();
+  if (query.length === 0) {
+    return undefined;
+  }
+
+  return query;
+};
+
+const createDashboardPayload = async (options: {
+  loadInstalledState: typeof loadInstalledSkillsState;
+  previousState?: InstalledSkillsState;
+}): Promise<DashboardPayload> => {
   return {
     launchDirectory: getLaunchDirectory(),
     loadedAt: new Date().toISOString(),
-    installedState: await loadState({
-      previousState,
+    installedState: await options.loadInstalledState({
+      previousState: options.previousState,
     }),
   };
 };
 
 export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
-  const updateAdapter = options.updateAdapter ?? skillsCommandAdapter;
-  const loadState = options.loadState ?? loadInstalledSkillsState;
+  const commandAdapter: CommandAdapter = {
+    removeSkills: options.commandAdapter?.removeSkills ?? defaultCommandAdapter.removeSkills,
+    updateSkills:
+      options.commandAdapter?.updateSkills ??
+      options.updateAdapter?.updateSkills ??
+      defaultCommandAdapter.updateSkills,
+  };
+  const loadInstalledState = options.loadInstalledState ?? loadInstalledSkillsState;
+  const loadSearchState = options.loadSearchState ?? loadSearchSkillsState;
   const app = new Hono();
 
   app.get('/api/health', (context) => {
@@ -130,35 +202,95 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
   });
 
   app.get('/api/dashboard', async (context) => {
-    return context.json(await createDashboardPayload(loadState));
+    return context.json(
+      await createDashboardPayload({
+        loadInstalledState,
+      })
+    );
   });
 
   app.post('/api/dashboard/refresh', async (context) => {
     const body = await context.req.json().catch(() => undefined);
     const previousState = getPreviousState(body);
 
-    return context.json(await createDashboardPayload(loadState, previousState));
+    return context.json(
+      await createDashboardPayload({
+        loadInstalledState,
+        previousState,
+      })
+    );
+  });
+
+  app.post('/api/dashboard/remove', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const request = getRemoveDashboardRequest(body);
+
+    if (!request) {
+      return context.json(
+        {
+          error:
+            'Invalid remove payload. Provide non-empty names and a valid scope ("project" or "global").',
+        },
+        400
+      );
+    }
+
+    const command = await commandAdapter.removeSkills({
+      names: request.names,
+      scope: request.scope,
+      agents: request.agents,
+    });
+
+    const payload = await createDashboardPayload({
+      loadInstalledState,
+      previousState: request.previousState,
+    });
+    const scopeState = payload.installedState[request.scope];
+    payload.installedState[request.scope] = {
+      ...scopeState,
+      command,
+      error: command.ok ? scopeState.error : createOperationFailureMessage(command),
+    };
+
+    return context.json({
+      payload,
+      command,
+      scope: request.scope,
+    });
   });
 
   app.post('/api/dashboard/update', async (context) => {
     const body = await context.req.json().catch(() => undefined);
-    const updateRequest = getUpdateRequest(body);
+    const request = getUpdateDashboardRequest(body);
 
-    if (!updateRequest) {
+    if (!request) {
       return context.json({ error: 'Invalid update request.' }, 400);
     }
 
-    const command = await updateAdapter.updateSkills({
-      scope: updateRequest.scope,
-      names: updateRequest.names,
+    const command = await commandAdapter.updateSkills({
+      scope: request.scope,
+      names: request.names,
     });
 
     const response: UpdateSkillsResponse = {
-      scope: updateRequest.scope,
+      scope: request.scope,
       command,
     };
 
     return context.json(response);
+  });
+
+  app.post('/api/search', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const query = getSearchQuery(body);
+
+    if (!query) {
+      return context.json({ error: 'Search query is required.' }, 400);
+    }
+
+    return context.json({
+      searchState: await loadSearchState(query),
+    });
   });
 
   return app;

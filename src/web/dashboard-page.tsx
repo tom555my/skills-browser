@@ -1,4 +1,5 @@
 import {
+  type FormEvent,
   type ReactNode,
   createContext,
   useCallback,
@@ -31,11 +32,19 @@ import type {
   DashboardPayload,
   InstalledSkillsScopeState,
   InstalledSkillsState,
+  SearchResultSkill,
+  SkillsCommandResult,
   UpdateSkillsRequest,
   UpdateSkillsResponse,
 } from '../features/skills/state';
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
-import { fetchDashboardState, refreshDashboardState, updateDashboardSkills } from './api';
+import {
+  fetchDashboardState,
+  refreshDashboardState,
+  removeInstalledSkills,
+  searchSkills,
+  updateDashboardSkills,
+} from './api';
 import { Badge } from './components/ui/badge';
 import { Button, buttonVariants } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -47,6 +56,7 @@ type ScopeFilter = 'all' | SkillScope;
 type SortOption = 'relevance' | 'name' | 'updated' | 'scope';
 type InstalledTab = 'all' | SkillScope;
 type SkillDetailsTab = 'overview' | 'activity' | 'output';
+type SearchStatus = 'idle' | 'pending' | 'success' | 'empty' | 'error';
 
 type BrowserSkill = InstalledSkill & {
   description: string;
@@ -55,8 +65,15 @@ type BrowserSkill = InstalledSkill & {
   installCommand: string;
 };
 
+type RemoveOutcome = {
+  status: 'success' | 'failure';
+  scope: SkillScope;
+  names: string[];
+  command: SkillsCommandResult;
+};
+
 type UpdateStatus = {
-  kind: 'success' | 'error';
+  tone: 'success' | 'error';
   message: string;
 } | null;
 
@@ -95,6 +112,13 @@ export function BrowsePage() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
+  const [searchCommand, setSearchCommand] = useState<SkillsCommandResult | null>(null);
+  const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
+  const [searchParseWarning, setSearchParseWarning] = useState<string | null>(null);
+  const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
 
   const sourceOptions = useMemo(() => {
     const values = new Set<string>();
@@ -189,6 +213,49 @@ export function BrowsePage() {
     }
   };
 
+  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (query.length === 0) {
+      setSearchStatus('error');
+      setSearchResults([]);
+      setSearchErrorMessage('Search query is required.');
+      setSearchParseWarning(null);
+      return;
+    }
+
+    setSearchStatus('pending');
+    setSearchErrorMessage(null);
+    setSearchParseWarning(null);
+    setLastSearchQuery(query);
+
+    try {
+      const response = await searchSkills(query);
+      const nextSearchState = response.searchState;
+      setSearchResults(nextSearchState.results);
+      setSearchCommand(nextSearchState.command);
+      setSearchParseWarning(nextSearchState.parseWarning);
+
+      if (nextSearchState.error) {
+        setSearchStatus('error');
+        setSearchErrorMessage(nextSearchState.error);
+        return;
+      }
+
+      if (nextSearchState.results.length === 0) {
+        setSearchStatus('empty');
+        return;
+      }
+
+      setSearchStatus('success');
+    } catch (error) {
+      setSearchStatus('error');
+      setSearchResults([]);
+      setSearchParseWarning(null);
+      setSearchErrorMessage(`Search request failed: ${getErrorMessage(error)}`);
+    }
+  };
+
   if (isInitialLoading && !payload) {
     return <PageLoadingState />;
   }
@@ -246,6 +313,102 @@ export function BrowsePage() {
           message={errorMessage}
         />
       ) : null}
+
+      <Card className="border shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base">Discover Skills</CardTitle>
+          <CardDescription>
+            Search registry packages via `npx skills find &lt;query&gt;`
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form
+            className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+            onSubmit={(event) => void handleSearch(event)}
+          >
+            <label className="relative flex items-center">
+              <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+              <input
+                type="search"
+                placeholder="Search skills to install"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 pl-9 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                aria-label="Search skills query"
+              />
+            </label>
+            <Button type="submit" disabled={searchStatus === 'pending'}>
+              {searchStatus === 'pending' ? 'Searching' : 'Search'}
+            </Button>
+          </form>
+
+          {searchStatus === 'idle' ? (
+            <p className="text-sm text-muted-foreground">
+              Run a search to find installable skills from the upstream CLI.
+            </p>
+          ) : null}
+
+          {searchStatus === 'pending' ? (
+            <p className="text-sm text-muted-foreground">Searching for "{lastSearchQuery}"...</p>
+          ) : null}
+
+          {searchStatus === 'error' && searchErrorMessage ? (
+            <StatusBanner
+              className="border-destructive/40 bg-destructive/5"
+              icon={<X className="size-4 text-destructive" />}
+              message={searchErrorMessage}
+            />
+          ) : null}
+
+          {searchStatus === 'empty' ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No skills found for "{lastSearchQuery}".
+            </p>
+          ) : null}
+
+          {searchStatus === 'success' ? (
+            <ul className="space-y-2">
+              {searchResults.map((result) => (
+                <li key={result.id} className="rounded-lg border p-3">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-sm font-medium">{result.source}</p>
+                      {result.installs ? (
+                        <Badge variant="outline">{result.installs} installs</Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {result.owner}/{result.repository}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono">
+                        npx skills add {result.source}
+                      </code>
+                      {result.url ? (
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                        >
+                          <ExternalLink className="size-4" />
+                          <span>Open</span>
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {searchParseWarning ? (
+            <p className="text-xs text-muted-foreground">{searchParseWarning}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <SearchCommandOutputCard command={searchCommand} />
 
       <Card className="border shadow-none">
         <CardContent className="space-y-3">
@@ -387,6 +550,16 @@ export function InstalledPage() {
   const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
   const [activeTab, setActiveTab] = useState<InstalledTab>('all');
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+  const [removeScope, setRemoveScope] = useState<SkillScope>('project');
+  const [removeAgentsInput, setRemoveAgentsInput] = useState('');
+  const [removeConfirmed, setRemoveConfirmed] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [removeStatus, setRemoveStatus] = useState<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [removeOutcome, setRemoveOutcome] = useState<RemoveOutcome | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
   const [updateResults, setUpdateResults] = useState<UpdateSkillsResponse[]>([]);
@@ -399,32 +572,30 @@ export function InstalledPage() {
     });
   }, [skills]);
 
-  const projectSkills = useMemo(() => {
-    return skills.filter((skill) => skill.scope === 'project');
-  }, [skills]);
+  const selectedSkillDetails = useMemo(() => {
+    return skills.filter((skill) => selectedSkills.has(skill.id));
+  }, [selectedSkills, skills]);
 
-  const globalSkills = useMemo(() => {
-    return skills.filter((skill) => skill.scope === 'global');
-  }, [skills]);
+  const selectedNamesForScope = useMemo(() => {
+    const names = new Set<string>();
 
-  const visibleSkills = useMemo(() => {
-    if (activeTab === 'all') {
-      return skills;
+    for (const skill of selectedSkillDetails) {
+      if (skill.scope === removeScope) {
+        names.add(skill.name);
+      }
     }
 
-    return skills.filter((skill) => skill.scope === activeTab);
-  }, [activeTab, skills]);
+    return Array.from(names).sort((left, right) => left.localeCompare(right));
+  }, [removeScope, selectedSkillDetails]);
 
-  const selectedOperations = useMemo(() => {
+  const selectedUpdateOperations = useMemo(() => {
     const groupedNames: Record<SkillScope, Set<string>> = {
       project: new Set(),
       global: new Set(),
     };
 
-    for (const skill of skills) {
-      if (selectedSkills.has(skill.id)) {
-        groupedNames[skill.scope].add(skill.name);
-      }
+    for (const skill of selectedSkillDetails) {
+      groupedNames[skill.scope].add(skill.name);
     }
 
     const operations: UpdateSkillsRequest[] = [];
@@ -442,7 +613,29 @@ export function InstalledPage() {
     }
 
     return operations;
-  }, [selectedSkills, skills]);
+  }, [selectedSkillDetails]);
+
+  useEffect(() => {
+    if (!isRemoveConfirmOpen || selectedNamesForScope.length > 0) {
+      return;
+    }
+
+    const nextScope = selectedSkillDetails.some((skill) => skill.scope === 'project')
+      ? 'project'
+      : 'global';
+
+    if (nextScope !== removeScope) {
+      setRemoveScope(nextScope);
+    }
+  }, [isRemoveConfirmOpen, removeScope, selectedNamesForScope, selectedSkillDetails]);
+
+  const visibleSkills = useMemo(() => {
+    if (activeTab === 'all') {
+      return skills;
+    }
+
+    return skills.filter((skill) => skill.scope === activeTab);
+  }, [activeTab, skills]);
 
   const selectAllVisible = () => {
     setSelectedSkills(new Set(visibleSkills.map((skill) => skill.id)));
@@ -452,22 +645,122 @@ export function InstalledPage() {
     setSelectedSkills(new Set());
   };
 
-  const toggleSkill = (skillId: string) => {
-    setSelectedSkills((current) => {
-      const next = new Set(current);
-      if (next.has(skillId)) {
-        next.delete(skillId);
-      } else {
-        next.add(skillId);
+  const openRemoveConfirmation = () => {
+    if (isUpdating) {
+      return;
+    }
+
+    const scopes = new Set(selectedSkillDetails.map((skill) => skill.scope));
+    const nextScope =
+      scopes.size === 1
+        ? (selectedSkillDetails[0]?.scope ?? 'project')
+        : activeTab === 'project' || activeTab === 'global'
+          ? activeTab
+          : 'project';
+
+    setRemoveScope(nextScope);
+    setRemoveAgentsInput('');
+    setRemoveConfirmed(false);
+    setRemoveStatus(null);
+    setIsRemoveConfirmOpen(true);
+  };
+
+  const closeRemoveConfirmation = () => {
+    if (isRemoving || isUpdating) {
+      return;
+    }
+
+    setIsRemoveConfirmOpen(false);
+    setRemoveConfirmed(false);
+  };
+
+  const handleRemoveSelected = async () => {
+    if (!payload || isRemoving || isUpdating) {
+      return;
+    }
+
+    const names = selectedNamesForScope;
+    if (names.length === 0) {
+      setRemoveStatus({
+        tone: 'error',
+        message: `No selected skills in ${scopeLabel(removeScope)} scope.`,
+      });
+      return;
+    }
+
+    setIsRemoving(true);
+    setRemoveStatus(null);
+
+    const namesSet = new Set(names);
+
+    try {
+      const response = await removeInstalledSkills({
+        names,
+        scope: removeScope,
+        agents: parseCommaSeparatedValues(removeAgentsInput),
+        previousState: payload.installedState,
+      });
+
+      const status = response.command.ok ? 'success' : 'failure';
+      setRemoveOutcome({
+        status,
+        scope: removeScope,
+        names,
+        command: response.command,
+      });
+
+      if (!response.command.ok) {
+        setRemoveStatus({
+          tone: 'error',
+          message: createCommandFailureMessage(response.command),
+        });
+        return;
       }
 
-      return next;
-    });
+      setSelectedSkills((current) => {
+        const next = new Set(current);
+
+        for (const skill of skills) {
+          if (!next.has(skill.id)) {
+            continue;
+          }
+
+          if (skill.scope === removeScope && namesSet.has(skill.name)) {
+            next.delete(skill.id);
+          }
+        }
+
+        return next;
+      });
+
+      setIsRemoveConfirmOpen(false);
+      setRemoveConfirmed(false);
+      setRemoveStatus({
+        tone: 'success',
+        message: `Removed ${names.length} skill${names.length === 1 ? '' : 's'} from ${scopeLabel(removeScope)} scope.`,
+      });
+
+      try {
+        await refresh();
+      } catch (error) {
+        setRemoveStatus({
+          tone: 'error',
+          message: `Removal succeeded but refresh failed: ${getErrorMessage(error)}`,
+        });
+      }
+    } catch (error) {
+      setRemoveStatus({
+        tone: 'error',
+        message: `Remove request failed: ${getErrorMessage(error)}`,
+      });
+    } finally {
+      setIsRemoving(false);
+    }
   };
 
   const runUpdates = useCallback(
     async (operations: UpdateSkillsRequest[]) => {
-      if (isUpdating || operations.length === 0) {
+      if (isUpdating || isRemoving || operations.length === 0) {
         return;
       }
 
@@ -487,7 +780,7 @@ export function InstalledPage() {
         const failureCount = results.length - successCount;
 
         setUpdateStatus({
-          kind: failureCount === 0 ? 'success' : 'error',
+          tone: failureCount === 0 ? 'success' : 'error',
           message: buildUpdateStatusMessage({
             totalCount: results.length,
             successCount,
@@ -496,18 +789,25 @@ export function InstalledPage() {
         });
 
         if (successCount > 0) {
-          await refresh();
+          try {
+            await refresh();
+          } catch (error) {
+            setUpdateStatus({
+              tone: 'error',
+              message: `Update succeeded but refresh failed: ${getErrorMessage(error)}`,
+            });
+          }
         }
       } catch (error) {
         setUpdateStatus({
-          kind: 'error',
+          tone: 'error',
           message: `Update request failed: ${getErrorMessage(error)}`,
         });
       } finally {
         setIsUpdating(false);
       }
     },
-    [isUpdating, refresh]
+    [isRemoving, isUpdating, refresh]
   );
 
   const handleUpdateProject = () => {
@@ -519,7 +819,20 @@ export function InstalledPage() {
   };
 
   const handleUpdateSelected = () => {
-    void runUpdates(selectedOperations);
+    void runUpdates(selectedUpdateOperations);
+  };
+
+  const toggleSkill = (skillId: string) => {
+    setSelectedSkills((current) => {
+      const next = new Set(current);
+      if (next.has(skillId)) {
+        next.delete(skillId);
+      } else {
+        next.add(skillId);
+      }
+
+      return next;
+    });
   };
 
   if (isInitialLoading && !payload) {
@@ -542,6 +855,9 @@ export function InstalledPage() {
     );
   }
 
+  const projectSkills = skills.filter((skill) => skill.scope === 'project');
+  const globalSkills = skills.filter((skill) => skill.scope === 'global');
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -556,7 +872,7 @@ export function InstalledPage() {
           <Button
             variant="outline"
             size="sm"
-            disabled={isUpdating || projectSkills.length === 0}
+            disabled={isUpdating || isRemoving || projectSkills.length === 0}
             onClick={handleUpdateProject}
           >
             <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
@@ -565,7 +881,7 @@ export function InstalledPage() {
           <Button
             variant="outline"
             size="sm"
-            disabled={isUpdating || globalSkills.length === 0}
+            disabled={isUpdating || isRemoving || globalSkills.length === 0}
             onClick={handleUpdateGlobal}
           >
             <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
@@ -577,20 +893,30 @@ export function InstalledPage() {
       {selectedSkills.size > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">{selectedSkills.size} selected</span>
-          <Button variant="outline" size="sm" onClick={clearSelection} disabled={isUpdating}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearSelection}
+            disabled={isRemoving || isUpdating}
+          >
             Clear
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleUpdateSelected}
-            disabled={isUpdating || selectedOperations.length === 0}
+            disabled={isUpdating || isRemoving || selectedUpdateOperations.length === 0}
           >
             <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
-            <span>{isUpdating ? 'Updating' : 'Update selected'}</span>
+            <span>{isUpdating ? 'Updating...' : 'Update selected'}</span>
           </Button>
-          <Button variant="destructive" size="sm" disabled>
-            Remove
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={openRemoveConfirmation}
+            disabled={isRemoving || isUpdating}
+          >
+            {isRemoving ? 'Removing...' : 'Remove'}
           </Button>
         </div>
       ) : null}
@@ -603,23 +929,145 @@ export function InstalledPage() {
         />
       ) : null}
 
+      {removeStatus ? (
+        <StatusBanner
+          className={
+            removeStatus.tone === 'error'
+              ? 'border-destructive/40 bg-destructive/5'
+              : 'border-emerald-500/40 bg-emerald-500/5'
+          }
+          icon={
+            removeStatus.tone === 'error' ? (
+              <X className="size-4 text-destructive" />
+            ) : (
+              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+            )
+          }
+          message={removeStatus.message}
+        />
+      ) : null}
+
       {updateStatus ? (
         <StatusBanner
           className={
-            updateStatus.kind === 'success'
-              ? 'border-emerald-500/40 bg-emerald-500/5'
-              : 'border-destructive/40 bg-destructive/5'
+            updateStatus.tone === 'error'
+              ? 'border-destructive/40 bg-destructive/5'
+              : 'border-emerald-500/40 bg-emerald-500/5'
           }
           icon={
-            updateStatus.kind === 'success' ? (
-              <CheckCircle2 className="size-4 text-emerald-600" />
-            ) : (
+            updateStatus.tone === 'error' ? (
               <X className="size-4 text-destructive" />
+            ) : (
+              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
             )
           }
           message={updateStatus.message}
         />
       ) : null}
+
+      {isRemoveConfirmOpen ? (
+        <Card className="border shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Confirm removal</CardTitle>
+            <CardDescription>
+              Review scope and selected skills before running `npx skills remove`.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label htmlFor="remove-scope" className="text-sm font-medium">
+                  Scope
+                </label>
+                <select
+                  id="remove-scope"
+                  value={removeScope}
+                  disabled={isRemoving || isUpdating}
+                  onChange={(event) => {
+                    setRemoveScope(event.target.value === 'global' ? 'global' : 'project');
+                    setRemoveConfirmed(false);
+                  }}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                >
+                  <option value="project">Project</option>
+                  <option value="global">Global</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="remove-agents" className="text-sm font-medium">
+                  Target agents
+                </label>
+                <input
+                  id="remove-agents"
+                  value={removeAgentsInput}
+                  disabled={isRemoving || isUpdating}
+                  onChange={(event) => setRemoveAgentsInput(event.target.value)}
+                  placeholder="codex, claude"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional comma-separated values for `--agent`.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                Affected skills ({selectedNamesForScope.length})
+              </p>
+              {selectedNamesForScope.length > 0 ? (
+                <p className="mt-1 font-mono text-sm break-all">
+                  {selectedNamesForScope.join(', ')}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-destructive">
+                  No selected skills in {scopeLabel(removeScope)} scope.
+                </p>
+              )}
+            </div>
+
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={removeConfirmed}
+                disabled={isRemoving || isUpdating}
+                onChange={(event) => setRemoveConfirmed(event.target.checked)}
+                className="mt-0.5 size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+              />
+              <span>
+                I confirm removing {selectedNamesForScope.length} selected skill
+                {selectedNamesForScope.length === 1 ? '' : 's'} from {scopeLabel(removeScope)}{' '}
+                scope.
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={closeRemoveConfirmation}
+                disabled={isRemoving || isUpdating}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleRemoveSelected()}
+                disabled={
+                  !removeConfirmed || selectedNamesForScope.length === 0 || isRemoving || isUpdating
+                }
+              >
+                {isRemoving ? 'Removing...' : 'Confirm remove'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {removeOutcome ? <RemoveOperationCard outcome={removeOutcome} /> : null}
+      {updateResults.length > 0 ? <UpdateOperationCard results={updateResults} /> : null}
 
       <section className="grid gap-3 sm:grid-cols-3">
         <SummaryCard
@@ -648,6 +1096,7 @@ export function InstalledPage() {
             <Button
               size="sm"
               variant={activeTab === 'all' ? 'default' : 'outline'}
+              disabled={isRemoving || isUpdating}
               onClick={() => setActiveTab('all')}
             >
               All ({skills.length})
@@ -655,6 +1104,7 @@ export function InstalledPage() {
             <Button
               size="sm"
               variant={activeTab === 'project' ? 'default' : 'outline'}
+              disabled={isRemoving || isUpdating}
               onClick={() => setActiveTab('project')}
             >
               Project ({projectSkills.length})
@@ -662,15 +1112,26 @@ export function InstalledPage() {
             <Button
               size="sm"
               variant={activeTab === 'global' ? 'default' : 'outline'}
+              disabled={isRemoving || isUpdating}
               onClick={() => setActiveTab('global')}
             >
               Global ({globalSkills.length})
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={selectAllVisible} disabled={isUpdating}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={selectAllVisible}
+                disabled={isRemoving || isUpdating}
+              >
                 Select visible
               </Button>
-              <Button size="sm" variant="outline" onClick={clearSelection} disabled={isUpdating}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={clearSelection}
+                disabled={isRemoving || isUpdating}
+              >
                 Clear
               </Button>
             </div>
@@ -689,8 +1150,8 @@ export function InstalledPage() {
                       <input
                         type="checkbox"
                         checked={selectedSkills.has(skill.id)}
+                        disabled={isRemoving || isUpdating}
                         onChange={() => toggleSkill(skill.id)}
-                        disabled={isUpdating}
                         className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
                         aria-label={`Select ${skill.name}`}
                       />
@@ -730,8 +1191,6 @@ export function InstalledPage() {
           )}
         </CardContent>
       </Card>
-
-      {updateResults.length > 0 ? <UpdateResultCard results={updateResults} /> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <CommandOutputCard scope="project" scopeState={payload.installedState.project} />
@@ -1308,58 +1767,43 @@ function StatusBanner(props: { icon: ReactNode; className: string; message: stri
   );
 }
 
-function CommandOutputCard(props: { scope: SkillScope; scopeState: InstalledSkillsScopeState }) {
-  const { scope, scopeState } = props;
-  const command = scopeState.command;
+function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
+  const { command, names, scope, status } = props.outcome;
 
   return (
     <Card className="border shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
-          {scopeLabel(scope)} Command Output
+          Remove Command Output
         </CardTitle>
-        <CardDescription>Latest `npx skills list` output</CardDescription>
+        <CardDescription>
+          Removed {names.length} skill{names.length === 1 ? '' : 's'} from {scopeLabel(scope)} scope
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {command ? (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
-                {command.command.join(' ')}
-              </code>
-              <Badge variant={command.ok ? 'secondary' : 'destructive'}>
-                {command.ok ? 'Succeeded' : 'Failed'}
-              </Badge>
-            </div>
+        <div className="flex items-center justify-between gap-2">
+          <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+            {command.command.join(' ')}
+          </code>
+          <Badge variant={status === 'success' ? 'secondary' : 'destructive'}>
+            {status === 'success' ? 'Succeeded' : 'Failed'}
+          </Badge>
+        </div>
 
-            {command.stdout.trim() ? (
-              <OutputBlock label="stdout" value={command.stdout} />
-            ) : (
-              <p className="text-xs text-muted-foreground">No stdout output.</p>
-            )}
-
-            {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
-
-            {scopeState.error ? (
-              <p className="text-xs text-destructive">{scopeState.error}</p>
-            ) : null}
-
-            {scopeState.stale ? (
-              <p className="text-xs text-amber-500">
-                Showing stale data from previous successful load.
-              </p>
-            ) : null}
-          </>
+        {command.stdout.trim() ? (
+          <OutputBlock label="stdout" value={command.stdout} />
         ) : (
-          <p className="text-xs text-muted-foreground">No command output available yet.</p>
+          <p className="text-xs text-muted-foreground">No stdout output.</p>
         )}
+
+        {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
       </CardContent>
     </Card>
   );
 }
 
-function UpdateResultCard(props: { results: UpdateSkillsResponse[] }) {
+function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) {
   return (
     <Card className="border shadow-none">
       <CardHeader>
@@ -1398,6 +1842,97 @@ function UpdateResultCard(props: { results: UpdateSkillsResponse[] }) {
             ) : null}
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SearchCommandOutputCard(props: { command: SkillsCommandResult | null }) {
+  const { command } = props;
+
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TerminalSquare className="size-4" />
+          Search Command Output
+        </CardTitle>
+        <CardDescription>Latest `npx skills find` output</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {command ? (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+                {command.command.join(' ')}
+              </code>
+              <Badge variant={command.ok ? 'secondary' : 'destructive'}>
+                {command.ok ? 'Succeeded' : 'Failed'}
+              </Badge>
+            </div>
+
+            {command.stdout.trim() ? (
+              <OutputBlock label="stdout" value={command.stdout} />
+            ) : (
+              <p className="text-xs text-muted-foreground">No stdout output.</p>
+            )}
+
+            {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">No search command output available yet.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CommandOutputCard(props: { scope: SkillScope; scopeState: InstalledSkillsScopeState }) {
+  const { scope, scopeState } = props;
+  const command = scopeState.command;
+
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TerminalSquare className="size-4" />
+          {scopeLabel(scope)} Command Output
+        </CardTitle>
+        <CardDescription>Latest `npx skills` output for this scope</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {command ? (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+                {command.command.join(' ')}
+              </code>
+              <Badge variant={command.ok ? 'secondary' : 'destructive'}>
+                {command.ok ? 'Succeeded' : 'Failed'}
+              </Badge>
+            </div>
+
+            {command.stdout.trim() ? (
+              <OutputBlock label="stdout" value={command.stdout} />
+            ) : (
+              <p className="text-xs text-muted-foreground">No stdout output.</p>
+            )}
+
+            {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
+
+            {scopeState.error ? (
+              <p className="text-xs text-destructive">{scopeState.error}</p>
+            ) : null}
+
+            {scopeState.stale ? (
+              <p className="text-xs text-amber-500">
+                Showing stale data from previous successful load.
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">No command output available yet.</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -1570,6 +2105,30 @@ const buildUpdateStatusMessage = (input: {
     `and ${input.failureCount} failed`,
     `operation${input.totalCount === 1 ? '' : 's'}.`,
   ].join(' ');
+};
+
+const parseCommaSeparatedValues = (value: string): string[] => {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+};
+
+const createCommandFailureMessage = (command: SkillsCommandResult): string => {
+  const exitCode = command.exitCode === null ? 'unknown' : String(command.exitCode);
+  const commandLine = command.command.join(' ');
+  const stderr = command.stderr.trim();
+  const stdout = command.stdout.trim();
+
+  if (stderr.length > 0) {
+    return `Command "${commandLine}" failed (exit code ${exitCode}): ${stderr}`;
+  }
+
+  if (stdout.length > 0) {
+    return `Command "${commandLine}" failed (exit code ${exitCode}): ${stdout}`;
+  }
+
+  return `Command "${commandLine}" failed (exit code ${exitCode}).`;
 };
 
 const getErrorMessage = (error: unknown): string => {
