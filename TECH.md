@@ -216,24 +216,9 @@ type InstalledSkill = {
 };
 ```
 
-Recommended command log shape:
-
-```ts
-type CommandLogEntry = {
-  id: string;
-  operation: 'list' | 'search' | 'install' | 'remove' | 'update';
-  command: string[];
-  status: 'pending' | 'running' | 'succeeded' | 'failed';
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  startedAt: string;
-  finishedAt?: string;
-};
-```
-
-Command log entries are session-only browser state. Do not persist command
-history to disk in the first version.
+The UI should display the active or most recently completed command result for
+transparency and troubleshooting. It does not need to keep a browsable record of
+past commands.
 
 ## UI Composition
 
@@ -254,10 +239,10 @@ The product should stay close to shadcn defaults:
 Expected dashboard regions:
 
 - Header with project path and refresh action.
-- Sidebar or tab list for installed, search, and command history.
+- Sidebar or tab list for installed skills and search.
 - Main content list/table for skills.
 - Detail panel or route for selected skill.
-- Command output panel for recent operations.
+- Command output panel for the active or most recently completed operation.
 
 ## Validation and Safety
 
@@ -336,7 +321,7 @@ for the packaged `skills-browser` experience.
 5. Build the dashboard UI.
 6. Add search and install flows.
 7. Add remove and update flows.
-8. Add command history and error display.
+8. Add command output and error display.
 9. Add tests for command construction and critical UI flows.
 
 ## Open Technical Questions

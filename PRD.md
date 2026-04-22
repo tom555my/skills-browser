@@ -23,7 +23,7 @@ The `skills` CLI is powerful, but the command-line interface makes it harder to:
 - Compare available skills before installing them.
 - See which skills are installed across project and global scopes.
 - Understand which agents a skill is installed for.
-- Review command output, failures, and installation state in a persistent view.
+- Review command output, failures, and installation state while operations run.
 - Manage skills while staying oriented inside a project workspace.
 
 Skills Browser keeps the CLI as the source of truth while providing a faster
@@ -152,9 +152,7 @@ UI for discovery, inspection, and day-to-day management.
   - Running
   - Succeeded
   - Failed
-- Show stdout and stderr in a readable command log.
-- Preserve the most recent command history for the current browser session.
-- Do not persist command history across app restarts.
+- Show stdout and stderr in a readable command output panel.
 - Never hide a failed command behind a generic error.
 
 ## UX Requirements
@@ -212,7 +210,7 @@ UI for discovery, inspection, and day-to-day management.
 ### M4: Polish and Reliability
 
 - Improve loading, empty, and error states.
-- Add command history.
+- Refine command output display.
 - Add tests for command construction and server functions.
 - Verify responsive behavior and dark mode.
 
