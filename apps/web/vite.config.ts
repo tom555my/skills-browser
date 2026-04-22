@@ -7,7 +7,9 @@ import { nitro } from 'nitro/vite';
 
 const config = defineConfig({
   plugins: [
-    nitro(),
+    nitro({
+      preset: 'bun',
+    }),
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),

@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "bin": {
-    "cli": "./dist/index.js"
+    "skills-browser": "./dist/index.js"
   },
   "scripts": {
     "dev": "bun src/index.ts",
