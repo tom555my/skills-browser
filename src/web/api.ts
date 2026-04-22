@@ -1,4 +1,8 @@
-import type { DashboardPayload, InstalledSkillsState } from '../features/skills/state';
+import type {
+  DashboardPayload,
+  InstalledSkillsState,
+  SearchPayload,
+} from '../features/skills/state';
 
 const getErrorMessage = (response: Response): string => {
   return `Request failed (${response.status} ${response.statusText})`;
@@ -16,6 +20,20 @@ const parseDashboardPayload = async (response: Response): Promise<DashboardPaylo
   }
 
   return payload as DashboardPayload;
+};
+
+const parseSearchPayload = async (response: Response): Promise<SearchPayload> => {
+  if (!response.ok) {
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid API response.');
+  }
+
+  return payload as SearchPayload;
 };
 
 export const fetchDashboardState = async (): Promise<DashboardPayload> => {
@@ -44,4 +62,19 @@ export const refreshDashboardState = async (
   });
 
   return parseDashboardPayload(response);
+};
+
+export const searchSkills = async (query: string): Promise<SearchPayload> => {
+  const response = await fetch('/api/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+    }),
+  });
+
+  return parseSearchPayload(response);
 };

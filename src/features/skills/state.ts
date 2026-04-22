@@ -27,3 +27,26 @@ export type DashboardPayload = {
   loadedAt: string;
   installedState: InstalledSkillsState;
 };
+
+export type SearchResultSkill = {
+  id: string;
+  source: string;
+  owner: string;
+  repository: string;
+  name: string;
+  installs: string | null;
+  url: string | null;
+};
+
+export type SearchSkillsState = {
+  query: string;
+  results: SearchResultSkill[];
+  command: SkillsCommandResult;
+  error: string | null;
+  parseWarning: string | null;
+  searchedAt: string;
+};
+
+export type SearchPayload = {
+  searchState: SearchSkillsState;
+};

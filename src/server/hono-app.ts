@@ -6,6 +6,7 @@ import type {
   InstalledSkillsState,
 } from '../features/skills/state';
 import { loadInstalledSkillsState } from './installed-skills-state';
+import { loadSearchSkillsState } from './search-skills-state';
 
 const getLaunchDirectory = () => {
   const fromEnv = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
@@ -56,6 +57,23 @@ const getPreviousState = (value: unknown): InstalledSkillsState | undefined => {
   return previousState;
 };
 
+const getSearchQuery = (value: unknown): string | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.query !== 'string') {
+    return undefined;
+  }
+
+  const query = value.query.trim();
+  if (query.length === 0) {
+    return undefined;
+  }
+
+  return query;
+};
+
 const createDashboardPayload = async (
   previousState?: InstalledSkillsState
 ): Promise<DashboardPayload> => {
@@ -83,4 +101,17 @@ honoApp.post('/api/dashboard/refresh', async (context) => {
   const previousState = getPreviousState(body);
 
   return context.json(await createDashboardPayload(previousState));
+});
+
+honoApp.post('/api/search', async (context) => {
+  const body = await context.req.json().catch(() => undefined);
+  const query = getSearchQuery(body);
+
+  if (!query) {
+    return context.json({ error: 'Search query is required.' }, 400);
+  }
+
+  return context.json({
+    searchState: await loadSearchSkillsState(query),
+  });
 });
