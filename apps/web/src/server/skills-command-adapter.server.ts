@@ -1,6 +1,7 @@
 import { $ } from 'bun';
+import type { SkillScope } from '../features/skills/types';
 
-export type SkillScope = 'project' | 'global';
+export type { SkillScope } from '../features/skills/types';
 
 export type SkillsCommandResult = {
   ok: boolean;
@@ -156,5 +157,7 @@ export const createSkillsCommandAdapter = (
     },
   };
 };
+
+export type SkillsCommandAdapter = ReturnType<typeof createSkillsCommandAdapter>;
 
 export const skillsCommandAdapter = createSkillsCommandAdapter();
