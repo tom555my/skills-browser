@@ -2,14 +2,19 @@
   "name": "skills-browser",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "bun@1.3.13",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter web dev",
-    "dev:all": "pnpm -r --parallel dev",
-    "dev:cli": "pnpm --filter cli dev",
-    "lint": "pnpm -r lint",
-    "format": "pnpm -r format",
-    "typecheck": "pnpm -r typecheck"
+    "build": "bun --workspaces --if-present run build",
+    "dev": "bun --filter=web run dev",
+    "dev:all": "bun --workspaces --if-present --parallel run dev",
+    "dev:cli": "bun --filter=cli run dev",
+    "lint": "bun --workspaces --if-present run lint",
+    "format": "bun --workspaces --if-present run format",
+    "typecheck": "bun --workspaces run typecheck"
   },
   "devDependencies": {
     "oxfmt": "^0.46.0",

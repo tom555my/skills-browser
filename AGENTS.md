@@ -32,7 +32,7 @@ Clean, technical, precise. Think GitHub, Linear, Vercel. The shadcn/ui default a
 To add components to your app, run the following command at the root of your `web` app:
 
 ```bash
-pnpm dlx shadcn@latest add button -c apps/web
+bunx shadcn@latest add button -c apps/web
 ```
 
 This will place the ui components in the `packages/ui/src/components` directory.
@@ -49,5 +49,5 @@ import { Button } from "@skills-browser/ui/components/button";
 
 - **Linter:** oxlint (`oxlint.json`)
 - **Formatter:** oxfmt (`.oxfmtrc.json`)
-- **Monorepo:** pnpm workspace (no turborepo)
-- **Package manager:** pnpm@10.33.0
+- **Monorepo:** bun workspaces (no turborepo)
+- **Package manager:** bun@1.3.13
