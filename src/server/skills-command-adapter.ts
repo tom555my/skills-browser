@@ -1,0 +1,154 @@
+import type { SkillScope } from '../features/skills/types';
+import type { SkillsCommandResult } from '../features/skills/state';
+
+export type { SkillScope } from '../features/skills/types';
+export type { SkillsCommandResult } from '../features/skills/state';
+
+export type ListSkillsOptions = {
+  scope?: SkillScope;
+  agents?: readonly string[];
+  json?: boolean;
+};
+
+export type SearchSkillsOptions = {
+  query?: string;
+};
+
+export type InstallSkillOptions = {
+  source: string;
+  scope?: SkillScope;
+  agents?: readonly string[];
+  skills?: readonly string[];
+  copy?: boolean;
+};
+
+export type RemoveSkillsOptions = {
+  names?: readonly string[];
+  scope?: SkillScope;
+  agents?: readonly string[];
+};
+
+export type UpdateSkillsOptions = {
+  names?: readonly string[];
+  scope?: SkillScope;
+};
+
+type SkillsCommandRunner = (args: readonly string[]) => Promise<SkillsCommandResult>;
+
+const normalizeArgs = (values: readonly string[] | undefined): string[] => {
+  if (!values) {
+    return [];
+  }
+
+  return values.map((value) => value.trim()).filter((value) => value.length > 0);
+};
+
+const appendScopeFlag = (args: string[], scope: SkillScope | undefined): void => {
+  if (scope === 'global') {
+    args.push('--global');
+    return;
+  }
+
+  if (scope === 'project') {
+    args.push('--project');
+  }
+};
+
+const appendMultiValueFlag = (
+  args: string[],
+  flag: '--agent' | '--skill',
+  values: readonly string[] | undefined
+): void => {
+  const normalized = normalizeArgs(values);
+
+  if (normalized.length > 0) {
+    args.push(flag, ...normalized);
+  }
+};
+
+const runSkillsCommand: SkillsCommandRunner = async (args) => {
+  const process = await Bun.$`npx skills ${args}`.quiet().nothrow();
+
+  return {
+    ok: process.exitCode === 0,
+    command: ['npx', 'skills', ...args],
+    stdout: process.stdout.toString(),
+    stderr: process.stderr.toString(),
+    exitCode: process.exitCode,
+  };
+};
+
+export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkillsCommand) => {
+  return {
+    async listSkills(options: ListSkillsOptions = {}): Promise<SkillsCommandResult> {
+      const args = ['list'];
+
+      if (options.scope === 'global') {
+        args.push('--global');
+      }
+
+      appendMultiValueFlag(args, '--agent', options.agents);
+
+      if (options.json) {
+        args.push('--json');
+      }
+
+      return runner(args);
+    },
+
+    async searchSkills(options: SearchSkillsOptions = {}): Promise<SkillsCommandResult> {
+      const args = ['find'];
+      const query = options.query?.trim();
+
+      if (query) {
+        args.push(query);
+      }
+
+      return runner(args);
+    },
+
+    async installSkill(options: InstallSkillOptions): Promise<SkillsCommandResult> {
+      const source = options.source.trim();
+      if (source.length === 0) {
+        throw new Error('Skill source is required.');
+      }
+
+      const args = ['add', source];
+
+      if (options.scope === 'global') {
+        args.push('--global');
+      }
+
+      appendMultiValueFlag(args, '--agent', options.agents);
+      appendMultiValueFlag(args, '--skill', options.skills);
+
+      if (options.copy) {
+        args.push('--copy');
+      }
+
+      return runner(args);
+    },
+
+    async removeSkills(options: RemoveSkillsOptions = {}): Promise<SkillsCommandResult> {
+      const args = ['remove', ...normalizeArgs(options.names)];
+
+      if (options.scope === 'global') {
+        args.push('--global');
+      }
+
+      appendMultiValueFlag(args, '--agent', options.agents);
+
+      return runner(args);
+    },
+
+    async updateSkills(options: UpdateSkillsOptions = {}): Promise<SkillsCommandResult> {
+      const args = ['update', ...normalizeArgs(options.names)];
+      appendScopeFlag(args, options.scope);
+      return runner(args);
+    },
+  };
+};
+
+export type SkillsCommandAdapter = ReturnType<typeof createSkillsCommandAdapter>;
+
+export const skillsCommandAdapter = createSkillsCommandAdapter();
