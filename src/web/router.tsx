@@ -1,19 +1,49 @@
-import { Link, Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 
-import { DashboardPage } from './dashboard-page';
+import {
+  BrowsePage,
+  InstalledPage,
+  NotFoundPage,
+  RootLayout,
+  SettingsPage,
+  SkillDetailsPage,
+} from './dashboard-page';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
-  notFoundComponent: NotFound,
+  notFoundComponent: NotFoundPage,
 });
 
-const indexRoute = createRoute({
+const browseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: DashboardPage,
+  component: BrowsePage,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute]);
+const installedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'installed',
+  component: InstalledPage,
+});
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'settings',
+  component: SettingsPage,
+});
+
+const skillDetailsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'skill/$skillId',
+  component: SkillDetailsPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  browseRoute,
+  installedRoute,
+  settingsRoute,
+  skillDetailsRoute,
+]);
 
 export const router = createRouter({
   routeTree,
@@ -21,22 +51,6 @@ export const router = createRouter({
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
 });
-
-function RootLayout() {
-  return <Outlet />;
-}
-
-function NotFound() {
-  return (
-    <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-3 p-6 text-sm">
-      <h1 className="text-lg font-medium">Page not found</h1>
-      <p className="text-muted-foreground">The page you requested does not exist.</p>
-      <Link className="underline underline-offset-4" to="/">
-        Go back home
-      </Link>
-    </main>
-  );
-}
 
 declare module '@tanstack/react-router' {
   interface Register {
