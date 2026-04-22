@@ -1,4 +1,3 @@
-import { $ } from 'bun';
 import type { SkillScope } from '../features/skills/types';
 
 export type { SkillScope } from '../features/skills/types';
@@ -74,7 +73,7 @@ const appendMultiValueFlag = (
 };
 
 const runSkillsCommand: SkillsCommandRunner = async (args) => {
-  const process = await $`npx skills ${args}`.quiet().nothrow();
+  const process = await Bun.$`npx skills ${args}`.quiet().nothrow();
 
   return {
     ok: process.exitCode === 0,
