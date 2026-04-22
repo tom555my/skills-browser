@@ -7,14 +7,14 @@ This is a TanStack Start monorepo template with shadcn/ui.
 Start only the web dev server (recommended):
 
 ```bash
-pnpm dev
+bun run dev
 ```
 
 Other development commands:
 
 ```bash
-pnpm dev:all # run all workspace dev scripts in parallel
-pnpm dev:cli # run the CLI app only
+bun run dev:all # run all workspace dev scripts in parallel
+bun run dev:cli # run the CLI app only
 ```
 
 ## Adding components
@@ -22,7 +22,7 @@ pnpm dev:cli # run the CLI app only
 To add components to your app, run the following command at the root of your `web` app:
 
 ```bash
-pnpm dlx shadcn@latest add button -c apps/web
+bunx shadcn@latest add button -c apps/web
 ```
 
 This will place the ui components in the `packages/ui/src/components` directory.
