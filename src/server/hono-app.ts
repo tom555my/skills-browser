@@ -5,11 +5,22 @@ import type {
   InstalledSkillsScopeState,
   InstalledSkillsState,
   SkillsCommandResult,
+  UpdateSkillsRequest,
+  UpdateSkillsResponse,
 } from '../features/skills/state';
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
 import { loadSearchSkillsState } from './search-skills-state';
-import { createSkillsCommandAdapter } from './skills-command-adapter';
+import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
+
+type CommandAdapter = Pick<SkillsCommandAdapter, 'removeSkills' | 'updateSkills'>;
+
+type CreateHonoAppOptions = {
+  commandAdapter?: CommandAdapter;
+  updateAdapter?: Pick<SkillsCommandAdapter, 'updateSkills'>;
+  loadInstalledState?: typeof loadInstalledSkillsState;
+  loadSearchState?: typeof loadSearchSkillsState;
+};
 
 const getLaunchDirectory = () => {
   const fromEnv = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
@@ -81,6 +92,28 @@ type RemoveDashboardRequest = {
   previousState?: InstalledSkillsState;
 };
 
+const getUpdateDashboardRequest = (value: unknown): UpdateSkillsRequest | null => {
+  if (!isRecord(value) || !isScope(value.scope)) {
+    return null;
+  }
+
+  if (!('names' in value)) {
+    return {
+      scope: value.scope,
+    };
+  }
+
+  const names = normalizeStringArray(value.names);
+  if (names.length === 0) {
+    return null;
+  }
+
+  return {
+    scope: value.scope,
+    names,
+  };
+};
+
 const getRemoveDashboardRequest = (value: unknown): RemoveDashboardRequest | null => {
   if (!isRecord(value)) {
     return null;
@@ -120,7 +153,7 @@ const createOperationFailureMessage = (result: SkillsCommandResult): string => {
   return `Command "${command}" failed (exit code ${exitCode}).`;
 };
 
-const skillsCommandAdapter = createSkillsCommandAdapter();
+const defaultCommandAdapter = createSkillsCommandAdapter();
 
 const getSearchQuery = (value: unknown): string | undefined => {
   if (!isRecord(value)) {
@@ -139,79 +172,128 @@ const getSearchQuery = (value: unknown): string | undefined => {
   return query;
 };
 
-const createDashboardPayload = async (
-  previousState?: InstalledSkillsState
-): Promise<DashboardPayload> => {
+const createDashboardPayload = async (options: {
+  loadInstalledState: typeof loadInstalledSkillsState;
+  previousState?: InstalledSkillsState;
+}): Promise<DashboardPayload> => {
   return {
     launchDirectory: getLaunchDirectory(),
     loadedAt: new Date().toISOString(),
-    installedState: await loadInstalledSkillsState({
-      previousState,
+    installedState: await options.loadInstalledState({
+      previousState: options.previousState,
     }),
   };
 };
 
-export const honoApp = new Hono();
-
-honoApp.get('/api/health', (context) => {
-  return context.json({ ok: true });
-});
-
-honoApp.get('/api/dashboard', async (context) => {
-  return context.json(await createDashboardPayload());
-});
-
-honoApp.post('/api/dashboard/refresh', async (context) => {
-  const body = await context.req.json().catch(() => undefined);
-  const previousState = getPreviousState(body);
-
-  return context.json(await createDashboardPayload(previousState));
-});
-
-honoApp.post('/api/dashboard/remove', async (context) => {
-  const body = await context.req.json().catch(() => undefined);
-  const request = getRemoveDashboardRequest(body);
-
-  if (!request) {
-    return context.json(
-      {
-        error:
-          'Invalid remove payload. Provide non-empty names and a valid scope ("project" or "global").',
-      },
-      400
-    );
-  }
-
-  const command = await skillsCommandAdapter.removeSkills({
-    names: request.names,
-    scope: request.scope,
-    agents: request.agents,
-  });
-
-  const payload = await createDashboardPayload(request.previousState);
-  const scopeState = payload.installedState[request.scope];
-  payload.installedState[request.scope] = {
-    ...scopeState,
-    command,
-    error: command.ok ? scopeState.error : createOperationFailureMessage(command),
+export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
+  const commandAdapter: CommandAdapter = {
+    removeSkills: options.commandAdapter?.removeSkills ?? defaultCommandAdapter.removeSkills,
+    updateSkills:
+      options.commandAdapter?.updateSkills ??
+      options.updateAdapter?.updateSkills ??
+      defaultCommandAdapter.updateSkills,
   };
+  const loadInstalledState = options.loadInstalledState ?? loadInstalledSkillsState;
+  const loadSearchState = options.loadSearchState ?? loadSearchSkillsState;
+  const app = new Hono();
 
-  return context.json({
-    payload,
-    command,
-    scope: request.scope,
+  app.get('/api/health', (context) => {
+    return context.json({ ok: true });
   });
-});
 
-honoApp.post('/api/search', async (context) => {
-  const body = await context.req.json().catch(() => undefined);
-  const query = getSearchQuery(body);
-
-  if (!query) {
-    return context.json({ error: 'Search query is required.' }, 400);
-  }
-
-  return context.json({
-    searchState: await loadSearchSkillsState(query),
+  app.get('/api/dashboard', async (context) => {
+    return context.json(
+      await createDashboardPayload({
+        loadInstalledState,
+      })
+    );
   });
-});
+
+  app.post('/api/dashboard/refresh', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const previousState = getPreviousState(body);
+
+    return context.json(
+      await createDashboardPayload({
+        loadInstalledState,
+        previousState,
+      })
+    );
+  });
+
+  app.post('/api/dashboard/remove', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const request = getRemoveDashboardRequest(body);
+
+    if (!request) {
+      return context.json(
+        {
+          error:
+            'Invalid remove payload. Provide non-empty names and a valid scope ("project" or "global").',
+        },
+        400
+      );
+    }
+
+    const command = await commandAdapter.removeSkills({
+      names: request.names,
+      scope: request.scope,
+      agents: request.agents,
+    });
+
+    const payload = await createDashboardPayload({
+      loadInstalledState,
+      previousState: request.previousState,
+    });
+    const scopeState = payload.installedState[request.scope];
+    payload.installedState[request.scope] = {
+      ...scopeState,
+      command,
+      error: command.ok ? scopeState.error : createOperationFailureMessage(command),
+    };
+
+    return context.json({
+      payload,
+      command,
+      scope: request.scope,
+    });
+  });
+
+  app.post('/api/dashboard/update', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const request = getUpdateDashboardRequest(body);
+
+    if (!request) {
+      return context.json({ error: 'Invalid update request.' }, 400);
+    }
+
+    const command = await commandAdapter.updateSkills({
+      scope: request.scope,
+      names: request.names,
+    });
+
+    const response: UpdateSkillsResponse = {
+      scope: request.scope,
+      command,
+    };
+
+    return context.json(response);
+  });
+
+  app.post('/api/search', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const query = getSearchQuery(body);
+
+    if (!query) {
+      return context.json({ error: 'Search query is required.' }, 400);
+    }
+
+    return context.json({
+      searchState: await loadSearchState(query),
+    });
+  });
+
+  return app;
+};
+
+export const honoApp = createHonoApp();

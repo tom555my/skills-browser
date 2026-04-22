@@ -3,6 +3,8 @@ import type {
   InstalledSkillsState,
   SearchPayload,
   SkillsCommandResult,
+  UpdateSkillsRequest,
+  UpdateSkillsResponse,
 } from '../features/skills/state';
 import type { SkillScope } from '../features/skills/types';
 
@@ -26,6 +28,20 @@ const parseDashboardPayload = async (response: Response): Promise<DashboardPaylo
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const isCommandResult = (value: unknown): value is SkillsCommandResult => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.ok === 'boolean' &&
+    Array.isArray(value.command) &&
+    typeof value.stdout === 'string' &&
+    typeof value.stderr === 'string' &&
+    (typeof value.exitCode === 'number' || value.exitCode === null)
+  );
 };
 
 export type RemoveInstalledSkillsInput = {
@@ -79,6 +95,28 @@ const parseSearchPayload = async (response: Response): Promise<SearchPayload> =>
   return payload as SearchPayload;
 };
 
+const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResponse> => {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    if (isRecord(payload) && typeof payload.error === 'string') {
+      throw new Error(payload.error);
+    }
+
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+  if (!isRecord(payload) || (payload.scope !== 'project' && payload.scope !== 'global')) {
+    throw new Error('Invalid update response.');
+  }
+
+  if (!isCommandResult(payload.command)) {
+    throw new Error('Invalid update response.');
+  }
+
+  return payload as UpdateSkillsResponse;
+};
+
 export const fetchDashboardState = async (): Promise<DashboardPayload> => {
   const response = await fetch('/api/dashboard', {
     method: 'GET',
@@ -108,6 +146,24 @@ export const removeInstalledSkills = async (
   });
 
   return parseRemoveInstalledSkillsResponse(response);
+};
+
+export const updateDashboardSkills = async (
+  input: UpdateSkillsRequest
+): Promise<UpdateSkillsResponse> => {
+  const response = await fetch('/api/dashboard/update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      scope: input.scope,
+      names: input.names,
+    }),
+  });
+
+  return parseUpdateResponse(response);
 };
 
 export const refreshDashboardState = async (

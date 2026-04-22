@@ -50,3 +50,13 @@ export type SearchSkillsState = {
 export type SearchPayload = {
   searchState: SearchSkillsState;
 };
+
+export type UpdateSkillsRequest = {
+  scope: SkillScope;
+  names?: string[];
+};
+
+export type UpdateSkillsResponse = {
+  scope: SkillScope;
+  command: SkillsCommandResult;
+};
