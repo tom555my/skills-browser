@@ -36,7 +36,12 @@ import type {
   SkillsCommandResult,
 } from '../features/skills/state';
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
-import { fetchDashboardState, refreshDashboardState, searchSkills } from './api';
+import {
+  fetchDashboardState,
+  refreshDashboardState,
+  removeInstalledSkills,
+  searchSkills,
+} from './api';
 import { Badge } from './components/ui/badge';
 import { Button, buttonVariants } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -55,6 +60,13 @@ type BrowserSkill = InstalledSkill & {
   primarySource: string;
   activityAt: string | null;
   installCommand: string;
+};
+
+type RemoveOutcome = {
+  status: 'success' | 'failure';
+  scope: SkillScope;
+  names: string[];
+  command: SkillsCommandResult;
 };
 
 type DashboardDataValue = {
@@ -527,9 +539,19 @@ export function BrowsePage() {
 }
 
 export function InstalledPage() {
-  const { payload, skills, isInitialLoading, errorMessage, reload } = useDashboardData();
+  const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
   const [activeTab, setActiveTab] = useState<InstalledTab>('all');
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+  const [removeScope, setRemoveScope] = useState<SkillScope>('project');
+  const [removeAgentsInput, setRemoveAgentsInput] = useState('');
+  const [removeConfirmed, setRemoveConfirmed] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [removeStatus, setRemoveStatus] = useState<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [removeOutcome, setRemoveOutcome] = useState<RemoveOutcome | null>(null);
 
   useEffect(() => {
     const validIds = new Set(skills.map((skill) => skill.id));
@@ -538,6 +560,36 @@ export function InstalledPage() {
       return next;
     });
   }, [skills]);
+
+  const selectedSkillDetails = useMemo(() => {
+    return skills.filter((skill) => selectedSkills.has(skill.id));
+  }, [selectedSkills, skills]);
+
+  const selectedNamesForScope = useMemo(() => {
+    const names = new Set<string>();
+
+    for (const skill of selectedSkillDetails) {
+      if (skill.scope === removeScope) {
+        names.add(skill.name);
+      }
+    }
+
+    return Array.from(names).sort((left, right) => left.localeCompare(right));
+  }, [removeScope, selectedSkillDetails]);
+
+  useEffect(() => {
+    if (!isRemoveConfirmOpen || selectedNamesForScope.length > 0) {
+      return;
+    }
+
+    const nextScope = selectedSkillDetails.some((skill) => skill.scope === 'project')
+      ? 'project'
+      : 'global';
+
+    if (nextScope !== removeScope) {
+      setRemoveScope(nextScope);
+    }
+  }, [isRemoveConfirmOpen, removeScope, selectedNamesForScope, selectedSkillDetails]);
 
   const visibleSkills = useMemo(() => {
     if (activeTab === 'all') {
@@ -553,6 +605,115 @@ export function InstalledPage() {
 
   const clearSelection = () => {
     setSelectedSkills(new Set());
+  };
+
+  const openRemoveConfirmation = () => {
+    const scopes = new Set(selectedSkillDetails.map((skill) => skill.scope));
+    const nextScope =
+      scopes.size === 1
+        ? (selectedSkillDetails[0]?.scope ?? 'project')
+        : activeTab === 'project' || activeTab === 'global'
+          ? activeTab
+          : 'project';
+
+    setRemoveScope(nextScope);
+    setRemoveAgentsInput('');
+    setRemoveConfirmed(false);
+    setRemoveStatus(null);
+    setIsRemoveConfirmOpen(true);
+  };
+
+  const closeRemoveConfirmation = () => {
+    if (isRemoving) {
+      return;
+    }
+
+    setIsRemoveConfirmOpen(false);
+    setRemoveConfirmed(false);
+  };
+
+  const handleRemoveSelected = async () => {
+    if (!payload || isRemoving) {
+      return;
+    }
+
+    const names = selectedNamesForScope;
+    if (names.length === 0) {
+      setRemoveStatus({
+        tone: 'error',
+        message: `No selected skills in ${scopeLabel(removeScope)} scope.`,
+      });
+      return;
+    }
+
+    setIsRemoving(true);
+    setRemoveStatus(null);
+
+    const namesSet = new Set(names);
+
+    try {
+      const response = await removeInstalledSkills({
+        names,
+        scope: removeScope,
+        agents: parseCommaSeparatedValues(removeAgentsInput),
+        previousState: payload.installedState,
+      });
+
+      const status = response.command.ok ? 'success' : 'failure';
+      setRemoveOutcome({
+        status,
+        scope: removeScope,
+        names,
+        command: response.command,
+      });
+
+      if (!response.command.ok) {
+        setRemoveStatus({
+          tone: 'error',
+          message: createCommandFailureMessage(response.command),
+        });
+        return;
+      }
+
+      setSelectedSkills((current) => {
+        const next = new Set(current);
+
+        for (const skill of skills) {
+          if (!next.has(skill.id)) {
+            continue;
+          }
+
+          if (skill.scope === removeScope && namesSet.has(skill.name)) {
+            next.delete(skill.id);
+          }
+        }
+
+        return next;
+      });
+
+      setIsRemoveConfirmOpen(false);
+      setRemoveConfirmed(false);
+      setRemoveStatus({
+        tone: 'success',
+        message: `Removed ${names.length} skill${names.length === 1 ? '' : 's'} from ${scopeLabel(removeScope)} scope.`,
+      });
+
+      try {
+        await refresh();
+      } catch (error) {
+        setRemoveStatus({
+          tone: 'error',
+          message: `Removal succeeded but refresh failed: ${getErrorMessage(error)}`,
+        });
+      }
+    } catch (error) {
+      setRemoveStatus({
+        tone: 'error',
+        message: `Remove request failed: ${getErrorMessage(error)}`,
+      });
+    } finally {
+      setIsRemoving(false);
+    }
   };
 
   const toggleSkill = (skillId: string) => {
@@ -607,11 +768,16 @@ export function InstalledPage() {
             <Button variant="outline" size="sm" onClick={clearSelection}>
               Clear
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled>
               Update selected
             </Button>
-            <Button variant="destructive" size="sm">
-              Remove
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={openRemoveConfirmation}
+              disabled={isRemoving}
+            >
+              {isRemoving ? 'Removing...' : 'Remove'}
             </Button>
           </div>
         ) : null}
@@ -624,6 +790,117 @@ export function InstalledPage() {
           message={errorMessage}
         />
       ) : null}
+
+      {removeStatus ? (
+        <StatusBanner
+          className={
+            removeStatus.tone === 'error'
+              ? 'border-destructive/40 bg-destructive/5'
+              : 'border-emerald-500/40 bg-emerald-500/5'
+          }
+          icon={
+            removeStatus.tone === 'error' ? (
+              <X className="size-4 text-destructive" />
+            ) : (
+              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+            )
+          }
+          message={removeStatus.message}
+        />
+      ) : null}
+
+      {isRemoveConfirmOpen ? (
+        <Card className="border shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Confirm removal</CardTitle>
+            <CardDescription>
+              Review scope and selected skills before running `npx skills remove`.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label htmlFor="remove-scope" className="text-sm font-medium">
+                  Scope
+                </label>
+                <select
+                  id="remove-scope"
+                  value={removeScope}
+                  onChange={(event) => {
+                    setRemoveScope(event.target.value === 'global' ? 'global' : 'project');
+                    setRemoveConfirmed(false);
+                  }}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                >
+                  <option value="project">Project</option>
+                  <option value="global">Global</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="remove-agents" className="text-sm font-medium">
+                  Target agents
+                </label>
+                <input
+                  id="remove-agents"
+                  value={removeAgentsInput}
+                  onChange={(event) => setRemoveAgentsInput(event.target.value)}
+                  placeholder="codex, claude"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional comma-separated values for `--agent`.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                Affected skills ({selectedNamesForScope.length})
+              </p>
+              {selectedNamesForScope.length > 0 ? (
+                <p className="mt-1 font-mono text-sm break-all">
+                  {selectedNamesForScope.join(', ')}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-destructive">
+                  No selected skills in {scopeLabel(removeScope)} scope.
+                </p>
+              )}
+            </div>
+
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={removeConfirmed}
+                onChange={(event) => setRemoveConfirmed(event.target.checked)}
+                className="mt-0.5 size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+              />
+              <span>
+                I confirm removing {selectedNamesForScope.length} selected skill
+                {selectedNamesForScope.length === 1 ? '' : 's'} from {scopeLabel(removeScope)}{' '}
+                scope.
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={closeRemoveConfirmation}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleRemoveSelected()}
+                disabled={!removeConfirmed || selectedNamesForScope.length === 0 || isRemoving}
+              >
+                {isRemoving ? 'Removing...' : 'Confirm remove'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {removeOutcome ? <RemoveOperationCard outcome={removeOutcome} /> : null}
 
       <section className="grid gap-3 sm:grid-cols-3">
         <SummaryCard
@@ -1309,6 +1586,42 @@ function StatusBanner(props: { icon: ReactNode; className: string; message: stri
   );
 }
 
+function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
+  const { command, names, scope, status } = props.outcome;
+
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TerminalSquare className="size-4" />
+          Remove Command Output
+        </CardTitle>
+        <CardDescription>
+          Removed {names.length} skill{names.length === 1 ? '' : 's'} from {scopeLabel(scope)} scope
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+            {command.command.join(' ')}
+          </code>
+          <Badge variant={status === 'success' ? 'secondary' : 'destructive'}>
+            {status === 'success' ? 'Succeeded' : 'Failed'}
+          </Badge>
+        </div>
+
+        {command.stdout.trim() ? (
+          <OutputBlock label="stdout" value={command.stdout} />
+        ) : (
+          <p className="text-xs text-muted-foreground">No stdout output.</p>
+        )}
+
+        {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SearchCommandOutputCard(props: { command: SkillsCommandResult | null }) {
   const { command } = props;
 
@@ -1360,7 +1673,7 @@ function CommandOutputCard(props: { scope: SkillScope; scopeState: InstalledSkil
           <TerminalSquare className="size-4" />
           {scopeLabel(scope)} Command Output
         </CardTitle>
-        <CardDescription>Latest `npx skills list` output</CardDescription>
+        <CardDescription>Latest `npx skills` output for this scope</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {command ? (
@@ -1547,6 +1860,30 @@ const buildSkillActivity = (skill: BrowserSkill, loadedAt: string) => {
   });
 
   return events;
+};
+
+const parseCommaSeparatedValues = (value: string): string[] => {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+};
+
+const createCommandFailureMessage = (command: SkillsCommandResult): string => {
+  const exitCode = command.exitCode === null ? 'unknown' : String(command.exitCode);
+  const commandLine = command.command.join(' ');
+  const stderr = command.stderr.trim();
+  const stdout = command.stdout.trim();
+
+  if (stderr.length > 0) {
+    return `Command "${commandLine}" failed (exit code ${exitCode}): ${stderr}`;
+  }
+
+  if (stdout.length > 0) {
+    return `Command "${commandLine}" failed (exit code ${exitCode}): ${stdout}`;
+  }
+
+  return `Command "${commandLine}" failed (exit code ${exitCode}).`;
 };
 
 const getErrorMessage = (error: unknown): string => {

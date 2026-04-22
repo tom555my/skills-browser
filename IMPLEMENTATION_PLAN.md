@@ -183,7 +183,7 @@ Depend On:
 
 ## Ticket SB-008
 
-Status: Not Started
+Status: Completed
 
 Title: Implement Remove Flow
 
