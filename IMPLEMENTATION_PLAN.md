@@ -2,7 +2,7 @@
 
 ## Ticket SB-001
 
-Status: Not Started
+Status: Done
 
 Title: Replace Starter CLI With `skills-browser start`
 
@@ -29,7 +29,7 @@ Depend On:
 
 ## Ticket SB-002
 
-Status: Not Started
+Status: Done
 
 Title: Build TanStack Start With Nitro Bun Output
 
@@ -52,7 +52,7 @@ Depend On:
 
 ## Ticket SB-003
 
-Status: Not Started
+Status: Done
 
 Title: Add Server-Side `npx skills` Command Adapter
 
