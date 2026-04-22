@@ -8,8 +8,8 @@
 ## Commands
 
 ```bash
-bun run dev          # build CSS + start dev server at localhost:1996
-bun run build        # build CSS + compile to dist/skills-browser (single binary)
+bun run dev          # start dev server at localhost:1996 (Tailwind from globals.css)
+bun run build        # compile to dist/skills-browser (single binary)
 bun run test         # bun test
 bun run lint         # oxlint src
 bun run typecheck    # tsc --noEmit
@@ -26,7 +26,7 @@ Single-package Bun application. Not a monorepo.
 - **`src/server/`** — Hono API (`/api/health`, `/api/dashboard`, `/api/dashboard/refresh`).
 - **`src/web/`** — React 19 SPA (TanStack React Router, no SSR). HTML entry: `src/web/index.html`, JS entry: `src/web/main.tsx`.
 - **`src/web/components/ui/`** — shadcn/ui components (base-ui/react primitives + CVA).
-- **`src/web/styles/globals.css`** — Tailwind v4 source. `generated.css` is the build output (committed or regenerated on dev).
+- **`src/web/styles/globals.css`** — Tailwind v4 source loaded directly from `index.html`.
 - **`src/features/`** — Feature modules (types + state logic), shared between server and web.
 - **`src/types/modules.d.ts`** — Declares `*.css` and `*.html` modules for TypeScript.
 
@@ -34,7 +34,7 @@ Build compiles to a single binary: `bun build --compile ./src/cli.ts --outfile .
 
 ## Key Quirks
 
-- **CSS build:** `build:font` copies Inter woff2 files and runs Tailwind. `generated.css` is imported in `main.tsx` — never edit it directly.
+- **CSS pipeline:** Tailwind is handled by `bun-plugin-tailwind` from `globals.css`; no `generated.css` file is used.
 - **shadcn components** use `@base-ui/react` primitives (not Radix). Components live in `src/web/components/ui/`.
 - **Tailwind @source** in `globals.css` scans both `../web/` and `../../features/` for class usage.
 - **Formatter** is oxfmt (not Prettier). Config in `.oxfmtrc.json`. Sorts Tailwind classes in `cn()`/`cva()` calls.

@@ -13,7 +13,8 @@ A single-package Bun application with:
 bun run dev
 ```
 
-This runs a Tailwind CSS build and starts the app at `http://localhost:1996`.
+This starts the app at `http://localhost:1996` with Tailwind processed from
+`src/web/styles/globals.css` at serve time.
 
 ## Build Single Binary
 

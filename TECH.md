@@ -45,10 +45,9 @@ The SPA uses `fetch` against Hono API routes instead of server-side TanStack Sta
 ## Styling
 
 - Source styles: `src/web/styles/globals.css`
-- Compiled styles: `src/web/styles/generated.css`
-- Inter font files copied into `src/web/styles/files/`
-
-`build:font` performs font copy + Tailwind compilation before dev/build/start scripts.
+- Loaded in: `src/web/index.html` via `<link rel="stylesheet" href="./styles/globals.css" />`
+- Tailwind processing: `bun-plugin-tailwind` configured in `bunfig.toml` under `[serve.static].plugins`
+- No committed generated CSS artifact is required.
 
 ## Build and Distribution
 
