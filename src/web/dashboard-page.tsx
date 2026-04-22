@@ -1,4 +1,5 @@
 import {
+  type FormEvent,
   type ReactNode,
   createContext,
   useCallback,
@@ -31,9 +32,11 @@ import type {
   DashboardPayload,
   InstalledSkillsScopeState,
   InstalledSkillsState,
+  SearchResultSkill,
+  SkillsCommandResult,
 } from '../features/skills/state';
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
-import { fetchDashboardState, refreshDashboardState } from './api';
+import { fetchDashboardState, refreshDashboardState, searchSkills } from './api';
 import { Badge } from './components/ui/badge';
 import { Button, buttonVariants } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -45,6 +48,7 @@ type ScopeFilter = 'all' | SkillScope;
 type SortOption = 'relevance' | 'name' | 'updated' | 'scope';
 type InstalledTab = 'all' | SkillScope;
 type SkillDetailsTab = 'overview' | 'activity' | 'output';
+type SearchStatus = 'idle' | 'pending' | 'success' | 'empty' | 'error';
 
 type BrowserSkill = InstalledSkill & {
   description: string;
@@ -88,6 +92,13 @@ export function BrowsePage() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
+  const [searchCommand, setSearchCommand] = useState<SkillsCommandResult | null>(null);
+  const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
+  const [searchParseWarning, setSearchParseWarning] = useState<string | null>(null);
+  const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
 
   const sourceOptions = useMemo(() => {
     const values = new Set<string>();
@@ -182,6 +193,49 @@ export function BrowsePage() {
     }
   };
 
+  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (query.length === 0) {
+      setSearchStatus('error');
+      setSearchResults([]);
+      setSearchErrorMessage('Search query is required.');
+      setSearchParseWarning(null);
+      return;
+    }
+
+    setSearchStatus('pending');
+    setSearchErrorMessage(null);
+    setSearchParseWarning(null);
+    setLastSearchQuery(query);
+
+    try {
+      const response = await searchSkills(query);
+      const nextSearchState = response.searchState;
+      setSearchResults(nextSearchState.results);
+      setSearchCommand(nextSearchState.command);
+      setSearchParseWarning(nextSearchState.parseWarning);
+
+      if (nextSearchState.error) {
+        setSearchStatus('error');
+        setSearchErrorMessage(nextSearchState.error);
+        return;
+      }
+
+      if (nextSearchState.results.length === 0) {
+        setSearchStatus('empty');
+        return;
+      }
+
+      setSearchStatus('success');
+    } catch (error) {
+      setSearchStatus('error');
+      setSearchResults([]);
+      setSearchParseWarning(null);
+      setSearchErrorMessage(`Search request failed: ${getErrorMessage(error)}`);
+    }
+  };
+
   if (isInitialLoading && !payload) {
     return <PageLoadingState />;
   }
@@ -239,6 +293,102 @@ export function BrowsePage() {
           message={errorMessage}
         />
       ) : null}
+
+      <Card className="border shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base">Discover Skills</CardTitle>
+          <CardDescription>
+            Search registry packages via `npx skills find &lt;query&gt;`
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form
+            className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+            onSubmit={(event) => void handleSearch(event)}
+          >
+            <label className="relative flex items-center">
+              <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+              <input
+                type="search"
+                placeholder="Search skills to install"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 pl-9 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                aria-label="Search skills query"
+              />
+            </label>
+            <Button type="submit" disabled={searchStatus === 'pending'}>
+              {searchStatus === 'pending' ? 'Searching' : 'Search'}
+            </Button>
+          </form>
+
+          {searchStatus === 'idle' ? (
+            <p className="text-sm text-muted-foreground">
+              Run a search to find installable skills from the upstream CLI.
+            </p>
+          ) : null}
+
+          {searchStatus === 'pending' ? (
+            <p className="text-sm text-muted-foreground">Searching for "{lastSearchQuery}"...</p>
+          ) : null}
+
+          {searchStatus === 'error' && searchErrorMessage ? (
+            <StatusBanner
+              className="border-destructive/40 bg-destructive/5"
+              icon={<X className="size-4 text-destructive" />}
+              message={searchErrorMessage}
+            />
+          ) : null}
+
+          {searchStatus === 'empty' ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No skills found for "{lastSearchQuery}".
+            </p>
+          ) : null}
+
+          {searchStatus === 'success' ? (
+            <ul className="space-y-2">
+              {searchResults.map((result) => (
+                <li key={result.id} className="rounded-lg border p-3">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-sm font-medium">{result.source}</p>
+                      {result.installs ? (
+                        <Badge variant="outline">{result.installs} installs</Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {result.owner}/{result.repository}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono">
+                        npx skills add {result.source}
+                      </code>
+                      {result.url ? (
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                        >
+                          <ExternalLink className="size-4" />
+                          <span>Open</span>
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {searchParseWarning ? (
+            <p className="text-xs text-muted-foreground">{searchParseWarning}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <SearchCommandOutputCard command={searchCommand} />
 
       <Card className="border shadow-none">
         <CardContent className="space-y-3">
@@ -1156,6 +1306,46 @@ function StatusBanner(props: { icon: ReactNode; className: string; message: stri
       <span className="mt-0.5 shrink-0">{props.icon}</span>
       <p>{props.message}</p>
     </div>
+  );
+}
+
+function SearchCommandOutputCard(props: { command: SkillsCommandResult | null }) {
+  const { command } = props;
+
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TerminalSquare className="size-4" />
+          Search Command Output
+        </CardTitle>
+        <CardDescription>Latest `npx skills find` output</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {command ? (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+                {command.command.join(' ')}
+              </code>
+              <Badge variant={command.ok ? 'secondary' : 'destructive'}>
+                {command.ok ? 'Succeeded' : 'Failed'}
+              </Badge>
+            </div>
+
+            {command.stdout.trim() ? (
+              <OutputBlock label="stdout" value={command.stdout} />
+            ) : (
+              <p className="text-xs text-muted-foreground">No stdout output.</p>
+            )}
+
+            {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">No search command output available yet.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
