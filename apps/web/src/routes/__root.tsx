@@ -2,6 +2,18 @@ import { HeadContent, Link, Scripts, createRootRoute } from '@tanstack/react-rou
 
 import appCss from '@skills-browser/ui/styles/globals.css?url';
 
+const themeScript = `
+(() => {
+  try {
+    const key = 'skills-browser-theme';
+    const savedTheme = localStorage.getItem(key);
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
+    document.documentElement.classList.toggle('dark', isDark);
+  } catch {}
+})();
+`;
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -13,7 +25,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'Skills Browser',
       },
     ],
     links: [
@@ -29,8 +41,9 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <HeadContent />
       </head>
       <body>

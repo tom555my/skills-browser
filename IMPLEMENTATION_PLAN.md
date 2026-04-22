@@ -103,7 +103,7 @@ Depend On:
 
 ## Ticket SB-005
 
-Status: Not Started
+Status: Done
 
 Title: Build Dashboard Shell
 
