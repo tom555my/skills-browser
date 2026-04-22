@@ -48,7 +48,7 @@ The SPA uses `fetch` against Hono API routes instead of server-side TanStack Sta
 - Compiled styles: `src/web/styles/generated.css`
 - Inter font files copied into `src/web/styles/files/`
 
-`build:css` performs font copy + Tailwind compilation before dev/build/start scripts.
+`build:font` performs font copy + Tailwind compilation before dev/build/start scripts.
 
 ## Build and Distribution
 

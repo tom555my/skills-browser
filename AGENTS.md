@@ -1,53 +1,47 @@
 ## Design Context
 
-### Users
-Developers who install and manage AI agent skills from [skills.sh](https://skills.sh/). They use a local CLI (`apps/cli` with `@clack/prompts`) that launches a web frontend (`apps/web`) to browse, search, and manage their installed skills.
+- **Users:** Developers who install and manage AI agent skills from [skills.sh](https://skills.sh/).
+- **Aesthetic:** Clean, technical, minimal developer-tool aesthetic. shadcn/ui defaults are the north star — neutral oklch palette, Inter Variable, generous whitespace, no decoration.
+- **Theme:** Light + dark mode (both first-class). Dark class toggled via `skills-browser-theme` localStorage key.
+- **Anti-patterns:** Playful, heavy, overly designed consumer aesthetics.
 
-### Brand Personality
-Clean, technical, precise. Think GitHub, Linear, Vercel. The shadcn/ui default aesthetic is the target — neutral palette, Inter font, generous whitespace, no unnecessary decoration.
-
-### Aesthetic Direction
-- **Visual tone:** Minimal developer-tool aesthetic
-- **Theme:** Light + dark mode (both first-class)
-- **Colors:** Neutral oklch grayscale palette (current defaults). No brand color needed yet.
-- **Typography:** Inter Variable, clean hierarchy
-- **References:** shadcn/ui defaults are the north star
-- **Anti-references:** Playful, heavy, overly designed consumer apps
-
-### Design Principles
-1. **Utility over ornament** — Every element should serve the user's job of managing skills. No decorative flourishes.
-2. **Density with breathing room** — Show enough information to be useful, but don't cram. Use whitespace deliberately.
-3. **CLI-first, web-supportive** — The CLI is the primary interface; the web app is the visual companion for browsing/managing.
-4. **Neutral & extensible** — Stick to the shadcn/ui design language so it's easy to add components and maintain consistency.
-5. **Fast & responsive** — This is a local tool. It should feel instant.
-
-## Project Structure
-
-- `apps/web` — TanStack Start frontend (React 19, shadcn/ui, Tailwind v4)
-- `apps/cli` — CLI entrypoint using `@clack/prompts`
-- `packages/ui` — Shared UI components (shadcn/ui, base-ui/react primitives)
-
-## Adding components
-
-To add components to your app, run the following command at the root of your `web` app:
+## Commands
 
 ```bash
-bunx shadcn@latest add button -c apps/web
+bun run dev          # build CSS + start dev server at localhost:1996
+bun run build        # build CSS + compile to dist/skills-browser (single binary)
+bun run test         # bun test
+bun run lint         # oxlint src
+bun run typecheck    # tsc --noEmit
+bun run format       # oxfmt src/**/*.{ts,tsx}
 ```
 
-This will place the ui components in the `packages/ui/src/components` directory.
+No CI workflow exists yet. Run `lint → typecheck → test` before committing.
 
-## Using components
+## Architecture
 
-To use the components in your app, import them from the `ui` package.
+Single-package Bun application. Not a monorepo.
 
-```tsx
-import { Button } from "@skills-browser/ui/components/button";
-```
+- **`src/cli.ts`** — CLI entrypoint. Only command: `start`. Uses `@clack/prompts`, serves the SPA via `Bun.serve` with Hono for API routes.
+- **`src/server/`** — Hono API (`/api/health`, `/api/dashboard`, `/api/dashboard/refresh`).
+- **`src/web/`** — React 19 SPA (TanStack React Router, no SSR). HTML entry: `src/web/index.html`, JS entry: `src/web/main.tsx`.
+- **`src/web/components/ui/`** — shadcn/ui components (base-ui/react primitives + CVA).
+- **`src/web/styles/globals.css`** — Tailwind v4 source. `generated.css` is the build output (committed or regenerated on dev).
+- **`src/features/`** — Feature modules (types + state logic), shared between server and web.
+- **`src/types/modules.d.ts`** — Declares `*.css` and `*.html` modules for TypeScript.
 
-## Tooling
+Build compiles to a single binary: `bun build --compile ./src/cli.ts --outfile ./dist/skills-browser`.
 
-- **Linter:** oxlint (`oxlint.json`)
-- **Formatter:** oxfmt (`.oxfmtrc.json`)
-- **Monorepo:** bun workspaces (no turborepo)
-- **Package manager:** bun@1.3.13
+## Key Quirks
+
+- **CSS build:** `build:font` copies Inter woff2 files and runs Tailwind. `generated.css` is imported in `main.tsx` — never edit it directly.
+- **shadcn components** use `@base-ui/react` primitives (not Radix). Components live in `src/web/components/ui/`.
+- **Tailwind @source** in `globals.css` scans both `../web/` and `../../features/` for class usage.
+- **Formatter** is oxfmt (not Prettier). Config in `.oxfmtrc.json`. Sorts Tailwind classes in `cn()`/`cva()` calls.
+- **Bun linker** is set to `isolated` in `bunfig.toml`.
+
+## Code Style
+
+- No comments unless asked.
+- Single quotes, semicolons, 100 char print width, trailing commas (ES5), LF line endings.
+- `cn()` utility in `src/web/lib/utils.ts` for merging Tailwind classes.
