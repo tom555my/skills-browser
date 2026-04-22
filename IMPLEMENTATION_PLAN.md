@@ -132,31 +132,6 @@ Depend On:
 
 Status: Not Started
 
-Title: Add Session Command History
-
-Description:
-Add in-browser command history for the current session. Command history should
-make recent operations inspectable without persisting to disk.
-
-Acceptance Criteria:
-
-- UI records list, search, install, remove, update, and refresh operations.
-- Each command log entry shows operation, command args, status, stdout, stderr,
-  exit code, start time, and finish time.
-- Command output is scrollable and does not shift the page layout.
-- Failed commands show stderr when available.
-- Command history is cleared on app restart or browser session reset.
-- No command history is written to disk.
-
-Depend On:
-
-- SB-003
-- SB-005
-
-## Ticket SB-007
-
-Status: Not Started
-
 Title: Implement Search Flow
 
 Description:
@@ -170,16 +145,15 @@ Acceptance Criteria:
 - Server function executes `npx skills find <query>`.
 - UI shows pending, empty, success, and error states.
 - Search output is parsed into displayable results when possible.
-- Raw stdout and stderr remain available in command history.
+- Raw stdout and stderr remain available in the command output panel.
 - Search does not call the skills.sh API directly.
 
 Depend On:
 
 - SB-003
 - SB-005
-- SB-006
 
-## Ticket SB-008
+## Ticket SB-007
 
 Status: Not Started
 
@@ -200,15 +174,14 @@ Acceptance Criteria:
 - Server function executes the corresponding `npx skills add ...` command.
 - UI shows pending, success, and failure states.
 - Installed skills refresh after successful install.
-- Command output is captured in session command history.
+- Command output is shown for the completed operation.
 
 Depend On:
 
 - SB-004
 - SB-006
-- SB-007
 
-## Ticket SB-009
+## Ticket SB-008
 
 Status: Not Started
 
@@ -228,15 +201,14 @@ Acceptance Criteria:
 - Server function executes the corresponding `npx skills remove ...` command.
 - UI shows pending, success, and failure states.
 - Installed skills refresh after successful removal.
-- Command output is captured in session command history.
+- Command output is shown for the completed operation.
 
 Depend On:
 
 - SB-004
 - SB-005
-- SB-006
 
-## Ticket SB-010
+## Ticket SB-009
 
 Status: Not Started
 
@@ -255,15 +227,14 @@ Acceptance Criteria:
 - Server function executes the corresponding `npx skills update ...` command.
 - UI shows pending, success, and failure states.
 - Installed skills refresh after successful update.
-- Command output is captured in session command history.
+- Command output is shown for the completed operation.
 
 Depend On:
 
 - SB-004
 - SB-005
-- SB-006
 
-## Ticket SB-011
+## Ticket SB-010
 
 Status: Not Started
 
@@ -284,10 +255,10 @@ Acceptance Criteria:
 Depend On:
 
 - SB-005
+- SB-008
 - SB-009
-- SB-010
 
-## Ticket SB-012
+## Ticket SB-011
 
 Status: Not Started
 
@@ -312,11 +283,12 @@ Acceptance Criteria:
 Depend On:
 
 - SB-003
+- SB-007
 - SB-008
 - SB-009
 - SB-010
 
-## Ticket SB-013
+## Ticket SB-012
 
 Status: Not Started
 
@@ -341,9 +313,9 @@ Acceptance Criteria:
 
 Depend On:
 
-- SB-012
+- SB-011
 
-## Ticket SB-014
+## Ticket SB-013
 
 Status: Not Started
 
@@ -365,4 +337,4 @@ Acceptance Criteria:
 
 Depend On:
 
-- SB-013
+- SB-012
