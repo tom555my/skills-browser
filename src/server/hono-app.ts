@@ -4,8 +4,19 @@ import type {
   DashboardPayload,
   InstalledSkillsScopeState,
   InstalledSkillsState,
+  UpdateSkillsRequest,
+  UpdateSkillsResponse,
 } from '../features/skills/state';
+import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
+import { skillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
+
+type UpdateSkillsAdapter = Pick<SkillsCommandAdapter, 'updateSkills'>;
+
+type CreateHonoAppOptions = {
+  updateAdapter?: UpdateSkillsAdapter;
+  loadState?: typeof loadInstalledSkillsState;
+};
 
 const getLaunchDirectory = () => {
   const fromEnv = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
@@ -18,6 +29,10 @@ const getLaunchDirectory = () => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const isSkillScope = (value: unknown): value is SkillScope => {
+  return value === 'project' || value === 'global';
 };
 
 const isScopeState = (value: unknown): value is InstalledSkillsScopeState => {
@@ -56,31 +71,97 @@ const getPreviousState = (value: unknown): InstalledSkillsState | undefined => {
   return previousState;
 };
 
+const normalizeSkillNames = (value: unknown): string[] | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const names = value
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter((entry) => entry.length > 0);
+
+  if (names.length === 0) {
+    return null;
+  }
+
+  return names;
+};
+
+const getUpdateRequest = (value: unknown): UpdateSkillsRequest | null => {
+  if (!isRecord(value) || !isSkillScope(value.scope)) {
+    return null;
+  }
+
+  const names = normalizeSkillNames(value.names);
+  if (names === null) {
+    return null;
+  }
+
+  return {
+    scope: value.scope,
+    names,
+  };
+};
+
 const createDashboardPayload = async (
+  loadState: typeof loadInstalledSkillsState,
   previousState?: InstalledSkillsState
 ): Promise<DashboardPayload> => {
   return {
     launchDirectory: getLaunchDirectory(),
     loadedAt: new Date().toISOString(),
-    installedState: await loadInstalledSkillsState({
+    installedState: await loadState({
       previousState,
     }),
   };
 };
 
-export const honoApp = new Hono();
+export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
+  const updateAdapter = options.updateAdapter ?? skillsCommandAdapter;
+  const loadState = options.loadState ?? loadInstalledSkillsState;
+  const app = new Hono();
 
-honoApp.get('/api/health', (context) => {
-  return context.json({ ok: true });
-});
+  app.get('/api/health', (context) => {
+    return context.json({ ok: true });
+  });
 
-honoApp.get('/api/dashboard', async (context) => {
-  return context.json(await createDashboardPayload());
-});
+  app.get('/api/dashboard', async (context) => {
+    return context.json(await createDashboardPayload(loadState));
+  });
 
-honoApp.post('/api/dashboard/refresh', async (context) => {
-  const body = await context.req.json().catch(() => undefined);
-  const previousState = getPreviousState(body);
+  app.post('/api/dashboard/refresh', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const previousState = getPreviousState(body);
 
-  return context.json(await createDashboardPayload(previousState));
-});
+    return context.json(await createDashboardPayload(loadState, previousState));
+  });
+
+  app.post('/api/dashboard/update', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const updateRequest = getUpdateRequest(body);
+
+    if (!updateRequest) {
+      return context.json({ error: 'Invalid update request.' }, 400);
+    }
+
+    const command = await updateAdapter.updateSkills({
+      scope: updateRequest.scope,
+      names: updateRequest.names,
+    });
+
+    const response: UpdateSkillsResponse = {
+      scope: updateRequest.scope,
+      command,
+    };
+
+    return context.json(response);
+  });
+
+  return app;
+};
+
+export const honoApp = createHonoApp();

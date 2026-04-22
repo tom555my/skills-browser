@@ -27,3 +27,13 @@ export type DashboardPayload = {
   loadedAt: string;
   installedState: InstalledSkillsState;
 };
+
+export type UpdateSkillsRequest = {
+  scope: SkillScope;
+  names?: string[];
+};
+
+export type UpdateSkillsResponse = {
+  scope: SkillScope;
+  command: SkillsCommandResult;
+};

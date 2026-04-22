@@ -31,9 +31,11 @@ import type {
   DashboardPayload,
   InstalledSkillsScopeState,
   InstalledSkillsState,
+  UpdateSkillsRequest,
+  UpdateSkillsResponse,
 } from '../features/skills/state';
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
-import { fetchDashboardState, refreshDashboardState } from './api';
+import { fetchDashboardState, refreshDashboardState, updateDashboardSkills } from './api';
 import { Badge } from './components/ui/badge';
 import { Button, buttonVariants } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -52,6 +54,11 @@ type BrowserSkill = InstalledSkill & {
   activityAt: string | null;
   installCommand: string;
 };
+
+type UpdateStatus = {
+  kind: 'success' | 'error';
+  message: string;
+} | null;
 
 type DashboardDataValue = {
   payload: DashboardPayload | null;
@@ -377,9 +384,12 @@ export function BrowsePage() {
 }
 
 export function InstalledPage() {
-  const { payload, skills, isInitialLoading, errorMessage, reload } = useDashboardData();
+  const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
   const [activeTab, setActiveTab] = useState<InstalledTab>('all');
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
+  const [updateResults, setUpdateResults] = useState<UpdateSkillsResponse[]>([]);
 
   useEffect(() => {
     const validIds = new Set(skills.map((skill) => skill.id));
@@ -389,6 +399,14 @@ export function InstalledPage() {
     });
   }, [skills]);
 
+  const projectSkills = useMemo(() => {
+    return skills.filter((skill) => skill.scope === 'project');
+  }, [skills]);
+
+  const globalSkills = useMemo(() => {
+    return skills.filter((skill) => skill.scope === 'global');
+  }, [skills]);
+
   const visibleSkills = useMemo(() => {
     if (activeTab === 'all') {
       return skills;
@@ -396,6 +414,35 @@ export function InstalledPage() {
 
     return skills.filter((skill) => skill.scope === activeTab);
   }, [activeTab, skills]);
+
+  const selectedOperations = useMemo(() => {
+    const groupedNames: Record<SkillScope, Set<string>> = {
+      project: new Set(),
+      global: new Set(),
+    };
+
+    for (const skill of skills) {
+      if (selectedSkills.has(skill.id)) {
+        groupedNames[skill.scope].add(skill.name);
+      }
+    }
+
+    const operations: UpdateSkillsRequest[] = [];
+    if (groupedNames.project.size > 0) {
+      operations.push({
+        scope: 'project',
+        names: Array.from(groupedNames.project),
+      });
+    }
+    if (groupedNames.global.size > 0) {
+      operations.push({
+        scope: 'global',
+        names: Array.from(groupedNames.global),
+      });
+    }
+
+    return operations;
+  }, [selectedSkills, skills]);
 
   const selectAllVisible = () => {
     setSelectedSkills(new Set(visibleSkills.map((skill) => skill.id)));
@@ -418,6 +465,63 @@ export function InstalledPage() {
     });
   };
 
+  const runUpdates = useCallback(
+    async (operations: UpdateSkillsRequest[]) => {
+      if (isUpdating || operations.length === 0) {
+        return;
+      }
+
+      setIsUpdating(true);
+      setUpdateStatus(null);
+      setUpdateResults([]);
+
+      try {
+        const results: UpdateSkillsResponse[] = [];
+        for (const operation of operations) {
+          results.push(await updateDashboardSkills(operation));
+        }
+
+        setUpdateResults(results);
+
+        const successCount = results.filter((item) => item.command.ok).length;
+        const failureCount = results.length - successCount;
+
+        setUpdateStatus({
+          kind: failureCount === 0 ? 'success' : 'error',
+          message: buildUpdateStatusMessage({
+            totalCount: results.length,
+            successCount,
+            failureCount,
+          }),
+        });
+
+        if (successCount > 0) {
+          await refresh();
+        }
+      } catch (error) {
+        setUpdateStatus({
+          kind: 'error',
+          message: `Update request failed: ${getErrorMessage(error)}`,
+        });
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isUpdating, refresh]
+  );
+
+  const handleUpdateProject = () => {
+    void runUpdates([{ scope: 'project' }]);
+  };
+
+  const handleUpdateGlobal = () => {
+    void runUpdates([{ scope: 'global' }]);
+  };
+
+  const handleUpdateSelected = () => {
+    void runUpdates(selectedOperations);
+  };
+
   if (isInitialLoading && !payload) {
     return <PageLoadingState />;
   }
@@ -438,9 +542,6 @@ export function InstalledPage() {
     );
   }
 
-  const projectSkills = skills.filter((skill) => skill.scope === 'project');
-  const globalSkills = skills.filter((skill) => skill.scope === 'global');
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -451,27 +552,72 @@ export function InstalledPage() {
           </p>
         </div>
 
-        {selectedSkills.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selectedSkills.size} selected</span>
-            <Button variant="outline" size="sm" onClick={clearSelection}>
-              Clear
-            </Button>
-            <Button variant="outline" size="sm">
-              Update selected
-            </Button>
-            <Button variant="destructive" size="sm">
-              Remove
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isUpdating || projectSkills.length === 0}
+            onClick={handleUpdateProject}
+          >
+            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            <span>{isUpdating ? 'Updating' : 'Update project'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isUpdating || globalSkills.length === 0}
+            onClick={handleUpdateGlobal}
+          >
+            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            <span>{isUpdating ? 'Updating' : 'Update global'}</span>
+          </Button>
+        </div>
       </div>
+
+      {selectedSkills.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">{selectedSkills.size} selected</span>
+          <Button variant="outline" size="sm" onClick={clearSelection} disabled={isUpdating}>
+            Clear
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUpdateSelected}
+            disabled={isUpdating || selectedOperations.length === 0}
+          >
+            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            <span>{isUpdating ? 'Updating' : 'Update selected'}</span>
+          </Button>
+          <Button variant="destructive" size="sm" disabled>
+            Remove
+          </Button>
+        </div>
+      ) : null}
 
       {errorMessage ? (
         <StatusBanner
           className="border-destructive/40 bg-destructive/5"
           icon={<X className="size-4 text-destructive" />}
           message={errorMessage}
+        />
+      ) : null}
+
+      {updateStatus ? (
+        <StatusBanner
+          className={
+            updateStatus.kind === 'success'
+              ? 'border-emerald-500/40 bg-emerald-500/5'
+              : 'border-destructive/40 bg-destructive/5'
+          }
+          icon={
+            updateStatus.kind === 'success' ? (
+              <CheckCircle2 className="size-4 text-emerald-600" />
+            ) : (
+              <X className="size-4 text-destructive" />
+            )
+          }
+          message={updateStatus.message}
         />
       ) : null}
 
@@ -521,10 +667,10 @@ export function InstalledPage() {
               Global ({globalSkills.length})
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={selectAllVisible}>
+              <Button size="sm" variant="outline" onClick={selectAllVisible} disabled={isUpdating}>
                 Select visible
               </Button>
-              <Button size="sm" variant="outline" onClick={clearSelection}>
+              <Button size="sm" variant="outline" onClick={clearSelection} disabled={isUpdating}>
                 Clear
               </Button>
             </div>
@@ -544,6 +690,7 @@ export function InstalledPage() {
                         type="checkbox"
                         checked={selectedSkills.has(skill.id)}
                         onChange={() => toggleSkill(skill.id)}
+                        disabled={isUpdating}
                         className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
                         aria-label={`Select ${skill.name}`}
                       />
@@ -583,6 +730,8 @@ export function InstalledPage() {
           )}
         </CardContent>
       </Card>
+
+      {updateResults.length > 0 ? <UpdateResultCard results={updateResults} /> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <CommandOutputCard scope="project" scopeState={payload.installedState.project} />
@@ -1210,6 +1359,50 @@ function CommandOutputCard(props: { scope: SkillScope; scopeState: InstalledSkil
   );
 }
 
+function UpdateResultCard(props: { results: UpdateSkillsResponse[] }) {
+  return (
+    <Card className="border shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <RefreshCw className="size-4" />
+          Update Command Output
+        </CardTitle>
+        <CardDescription>Latest `npx skills update` output</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {props.results.map((result, index) => (
+          <div
+            key={`${result.scope}:${index}:${result.command.command.join(' ')}`}
+            className="space-y-2 rounded-lg border p-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{scopeLabel(result.scope)}</Badge>
+                <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
+                  {result.command.command.join(' ')}
+                </code>
+              </div>
+              <Badge variant={result.command.ok ? 'secondary' : 'destructive'}>
+                {result.command.ok ? 'Succeeded' : 'Failed'}
+              </Badge>
+            </div>
+
+            {result.command.stdout.trim() ? (
+              <OutputBlock label="stdout" value={result.command.stdout} />
+            ) : (
+              <p className="text-xs text-muted-foreground">No stdout output.</p>
+            )}
+
+            {result.command.stderr.trim() ? (
+              <OutputBlock label="stderr" value={result.command.stderr} />
+            ) : null}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function OutputBlock(props: { label: string; value: string }) {
   return (
     <div className="space-y-1">
@@ -1357,6 +1550,26 @@ const buildSkillActivity = (skill: BrowserSkill, loadedAt: string) => {
   });
 
   return events;
+};
+
+const buildUpdateStatusMessage = (input: {
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
+}): string => {
+  if (input.failureCount === 0) {
+    return `Update completed for ${input.successCount} operation${input.successCount === 1 ? '' : 's'}.`;
+  }
+
+  if (input.successCount === 0) {
+    return `Update failed for ${input.failureCount} operation${input.failureCount === 1 ? '' : 's'}.`;
+  }
+
+  return [
+    `Update completed with ${input.successCount} successful`,
+    `and ${input.failureCount} failed`,
+    `operation${input.totalCount === 1 ? '' : 's'}.`,
+  ].join(' ');
 };
 
 const getErrorMessage = (error: unknown): string => {
