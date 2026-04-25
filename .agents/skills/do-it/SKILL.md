@@ -11,6 +11,8 @@ description: "Execute engineering tasks end-to-end with a standard delivery work
 - Identify explicit constraints (tech stack, style, deadlines, non-goals).
 - Infer practical done criteria before writing code.
 - Surface blockers that require a user decision before proceeding.
+- If the work is tied to a GitHub ticket or project item, use `gh` before
+  implementation to move the ticket to `in-progress`.
 
 ## 2) Gather only the necessary context
 
