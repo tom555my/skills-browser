@@ -1,4 +1,12 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Link } from '@tanstack/react-router';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import {
@@ -34,6 +42,14 @@ import {
   CardTitle,
 } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from '../components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -221,8 +237,7 @@ export function BrowsePage() {
     }
   };
 
-  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSearch = async () => {
     const query = searchQuery.trim();
     if (query.length === 0) {
       setSearchStatus('error');
@@ -262,6 +277,15 @@ export function BrowsePage() {
       setSearchParseWarning(null);
       setSearchErrorMessage(`Search request failed: ${getErrorMessage(error)}`);
     }
+  };
+
+  const handleInstallSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    void handleSearch();
   };
 
   const applySearchResultSource = (source: string) => {
@@ -359,33 +383,28 @@ export function BrowsePage() {
               <DialogTitle>Install skill</DialogTitle>
               <DialogDescription>Search for a skill to install.</DialogDescription>
             </DialogHeader>
-            <div>
-              <form
-                className="relative flex h-14 items-center rounded-lg border bg-popover shadow-lg"
-                onSubmit={(event) => void handleSearch(event)}
-              >
-                <Package className="pointer-events-none absolute left-4 size-5 text-foreground" />
-                <Input
-                  ref={installSearchInputRef}
-                  type="search"
-                  placeholder="Type here to search new skills"
-                  value={searchQuery}
-                  onChange={(event) => void setSearchQuery(event.target.value)}
-                  className="h-full border-0 bg-transparent px-12 text-center text-base shadow-none focus-visible:ring-0 sm:text-lg"
-                  aria-label="Search new skills"
-                />
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="absolute right-3"
-                  disabled={searchStatus === 'pending'}
-                  aria-label="Search skills"
-                >
-                  <Search className={cn('size-4', searchStatus === 'pending' && 'animate-pulse')} />
-                </Button>
-              </form>
-            </div>
+            <Command className="rounded-xl border shadow-lg">
+              <CommandInput
+                ref={installSearchInputRef}
+                placeholder="Type here to search new skills"
+                value={searchQuery}
+                onValueChange={(value) => void setSearchQuery(value)}
+                onKeyDown={handleInstallSearchKeyDown}
+              />
+              <CommandList>
+                <CommandGroup>
+                  <CommandItem
+                    value={`search ${searchQuery}`}
+                    disabled={searchStatus === 'pending'}
+                    onSelect={() => void handleSearch()}
+                  >
+                    <Search className={cn(searchStatus === 'pending' && 'animate-pulse')} />
+                    <span>{searchStatus === 'pending' ? 'Searching' : 'Search'} skills.sh</span>
+                    <CommandShortcut>return</CommandShortcut>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
           </DialogContent>
         </Dialog>
       </div>
@@ -571,208 +590,202 @@ export function BrowsePage() {
 
           <div
             className={cn(
-              'space-y-3',
+              'min-h-0',
               selectedPreview
                 ? 'min-h-0 overflow-hidden rounded-xl border bg-popover p-3 shadow-lg'
                 : undefined
             )}
           >
-            <form
-              className="relative flex h-14 items-center rounded-lg border bg-popover shadow-lg"
-              onSubmit={(event) => void handleSearch(event)}
+            <Command
+              className={cn(
+                'border shadow-lg',
+                selectedPreview ? 'h-full rounded-lg shadow-none' : 'rounded-xl'
+              )}
+              shouldFilter={false}
             >
-              <Package className="pointer-events-none absolute left-4 size-5 text-foreground" />
-              <Input
+              <CommandInput
                 ref={installSearchInputRef}
-                type="search"
                 placeholder="Type here to search new skills"
                 value={searchQuery}
-                onChange={(event) => void setSearchQuery(event.target.value)}
-                className="h-full border-0 bg-transparent px-12 text-center text-base shadow-none focus-visible:ring-0 sm:text-lg"
-                aria-label="Search new skills"
+                onValueChange={(value) => void setSearchQuery(value)}
+                onKeyDown={handleInstallSearchKeyDown}
               />
-              <Button
-                type="submit"
-                size="icon-sm"
-                variant="ghost"
-                className="absolute right-3"
-                disabled={searchStatus === 'pending'}
-                aria-label="Search skills"
-              >
-                <Search className={cn('size-4', searchStatus === 'pending' && 'animate-pulse')} />
-              </Button>
-            </form>
-
-            {hasSearchResultContainer ? (
-              <div
+              <CommandList
                 className={cn(
-                  'animate-in fade-in slide-in-from-top-2 rounded-xl border bg-popover p-3 shadow-lg duration-200',
-                  selectedPreview ? 'max-h-[calc(100svh-8rem)] overflow-auto' : 'min-h-80'
+                  selectedPreview ? 'max-h-none flex-1 overflow-auto' : 'max-h-[28rem]',
+                  !hasSearchResultContainer && 'max-h-24'
                 )}
               >
-                {searchStatus === 'pending' ? (
-                  <div className="space-y-2">
-                    <p className="px-1 text-sm text-muted-foreground">
-                      Searching for "{lastSearchQuery}"...
-                    </p>
-                    {[0, 1, 2].map((item) => (
-                      <Skeleton key={item} className="h-16 rounded-lg border" />
-                    ))}
-                  </div>
-                ) : null}
-
-                {searchStatus === 'error' && searchErrorMessage ? (
-                  <StatusBanner
-                    className="border-destructive/40 bg-destructive/5"
-                    icon={<X className="size-4 text-destructive" />}
-                    message={searchErrorMessage}
-                  />
-                ) : null}
-
-                {searchStatus === 'empty' ? (
-                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                    No skills found for "{lastSearchQuery}".
-                  </p>
-                ) : null}
-
-                {searchStatus === 'success' ? (
+                {hasSearchResultContainer ? (
                   <>
-                    <ul className="space-y-2">
-                      {searchResults.map((result) => {
-                        const isViewing = selectedPreview?.id === result.id;
+                    {searchStatus === 'pending' ? (
+                      <CommandGroup>
+                        <p className="px-1 text-sm text-muted-foreground">
+                          Searching for "{lastSearchQuery}"...
+                        </p>
+                        {[0, 1, 2].map((item) => (
+                          <Skeleton key={item} className="h-16 rounded-lg border" />
+                        ))}
+                      </CommandGroup>
+                    ) : null}
 
-                        return (
-                          <li key={result.id}>
-                            <button
-                              type="button"
-                              className={cn(
-                                'flex w-full items-center justify-between gap-3 rounded-lg border bg-background p-3 text-left transition hover:bg-accent/60',
-                                isViewing && 'border-foreground bg-accent'
-                              )}
-                              onClick={() => handlePreviewSearchResult(result)}
-                            >
-                              <span className="min-w-0 space-y-1">
-                                <span className="block truncate font-mono text-sm font-medium">
-                                  {result.source}
-                                </span>
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  {result.owner}/{result.repository}
-                                  {result.installs ? ` · ${result.installs} installs` : ''}
-                                </span>
-                              </span>
-                              {isViewing ? (
-                                <Badge variant="secondary">Viewing</Badge>
-                              ) : (
-                                <Eye className="size-4 text-muted-foreground" />
-                              )}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-
-                    {selectedPreview ? (
-                      <form
-                        className="mt-3 space-y-3 rounded-lg border bg-background p-3"
-                        onSubmit={handleInstall}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-mono text-sm font-medium">
-                              {selectedPreview.source}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">Ready to add</p>
-                          </div>
-                          <Button size="sm" disabled={isInstalling} type="submit">
-                            <PackagePlus className="size-4" />
-                            <span>{isInstalling ? 'Adding' : 'Add'}</span>
-                          </Button>
-                        </div>
-
-                        <Input
-                          value={installSource}
-                          onChange={(event) => setInstallSource(event.target.value)}
-                          className="h-8 font-mono text-xs"
-                          aria-label="Install source"
-                          disabled={isInstalling}
+                    {searchStatus === 'error' && searchErrorMessage ? (
+                      <CommandGroup>
+                        <StatusBanner
+                          className="border-destructive/40 bg-destructive/5"
+                          icon={<X className="size-4 text-destructive" />}
+                          message={searchErrorMessage}
                         />
+                      </CommandGroup>
+                    ) : null}
 
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <Select
-                            value={installScope}
-                            disabled={isInstalling}
-                            onValueChange={(value) =>
-                              setInstallScope(value === 'global' ? 'global' : 'project')
-                            }
+                    {searchStatus === 'empty' ? (
+                      <CommandGroup>
+                        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                          No skills found for "{lastSearchQuery}".
+                        </p>
+                      </CommandGroup>
+                    ) : null}
+
+                    {searchStatus === 'success' ? (
+                      <>
+                        <CommandGroup heading="Skills">
+                          {searchResults.map((result) => {
+                            const isViewing = selectedPreview?.id === result.id;
+
+                            return (
+                              <CommandItem
+                                key={result.id}
+                                value={`${result.source} ${result.owner} ${result.repository}`}
+                                data-checked={isViewing}
+                                className={cn(
+                                  'items-start gap-3 px-3 py-3',
+                                  isViewing && 'bg-accent text-accent-foreground'
+                                )}
+                                onSelect={() => handlePreviewSearchResult(result)}
+                              >
+                                <Eye className="mt-0.5 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 space-y-1">
+                                  <span className="block truncate font-mono text-sm font-medium">
+                                    {result.source}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {result.owner}/{result.repository}
+                                    {result.installs ? ` · ${result.installs} installs` : ''}
+                                  </span>
+                                </span>
+                                {isViewing ? <Badge variant="secondary">Viewing</Badge> : null}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+
+                        {selectedPreview ? (
+                          <form
+                            className="mt-3 space-y-3 rounded-lg border bg-background p-3"
+                            onSubmit={handleInstall}
                           >
-                            <SelectTrigger
-                              className="h-8 w-full text-xs"
-                              aria-label="Install scope"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                <SelectItem value="project">Project</SelectItem>
-                                <SelectItem value="global">Global</SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                          <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
-                            <Checkbox
-                              checked={installCopy}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate font-mono text-sm font-medium">
+                                  {selectedPreview.source}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  Ready to add
+                                </p>
+                              </div>
+                              <Button size="sm" disabled={isInstalling} type="submit">
+                                <PackagePlus className="size-4" />
+                                <span>{isInstalling ? 'Adding' : 'Add'}</span>
+                              </Button>
+                            </div>
+
+                            <Input
+                              value={installSource}
+                              onChange={(event) => setInstallSource(event.target.value)}
+                              className="h-8 font-mono text-xs"
+                              aria-label="Install source"
                               disabled={isInstalling}
-                              onCheckedChange={(checked) => setInstallCopy(checked === true)}
-                              className="size-3.5"
                             />
-                            <span>Copy files</span>
-                          </label>
-                        </div>
 
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <Input
-                            value={installAgentsInput}
-                            onChange={(event) => setInstallAgentsInput(event.target.value)}
-                            placeholder="Agents"
-                            disabled={isInstalling}
-                            className="h-8 text-xs"
-                          />
-                          <Input
-                            value={installSkillsInput}
-                            onChange={(event) => setInstallSkillsInput(event.target.value)}
-                            placeholder="Skill filters"
-                            disabled={isInstalling}
-                            className="h-8 text-xs"
-                          />
-                        </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Select
+                                value={installScope}
+                                disabled={isInstalling}
+                                onValueChange={(value) =>
+                                  setInstallScope(value === 'global' ? 'global' : 'project')
+                                }
+                              >
+                                <SelectTrigger
+                                  className="h-8 w-full text-xs"
+                                  aria-label="Install scope"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    <SelectItem value="project">Project</SelectItem>
+                                    <SelectItem value="global">Global</SelectItem>
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                              <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
+                                <Checkbox
+                                  checked={installCopy}
+                                  disabled={isInstalling}
+                                  onCheckedChange={(checked) => setInstallCopy(checked === true)}
+                                  className="size-3.5"
+                                />
+                                <span>Copy files</span>
+                              </label>
+                            </div>
 
-                        {installStatus ? (
-                          <StatusBanner
-                            className={
-                              installStatus.tone === 'error'
-                                ? 'border-destructive/40 bg-destructive/5'
-                                : 'border-emerald-500/40 bg-emerald-500/5'
-                            }
-                            icon={
-                              installStatus.tone === 'error' ? (
-                                <X className="size-4 text-destructive" />
-                              ) : (
-                                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                              )
-                            }
-                            message={installStatus.message}
-                          />
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Input
+                                value={installAgentsInput}
+                                onChange={(event) => setInstallAgentsInput(event.target.value)}
+                                placeholder="Agents"
+                                disabled={isInstalling}
+                                className="h-8 text-xs"
+                              />
+                              <Input
+                                value={installSkillsInput}
+                                onChange={(event) => setInstallSkillsInput(event.target.value)}
+                                placeholder="Skill filters"
+                                disabled={isInstalling}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+
+                            {installStatus ? (
+                              <StatusBanner
+                                className={
+                                  installStatus.tone === 'error'
+                                    ? 'border-destructive/40 bg-destructive/5'
+                                    : 'border-emerald-500/40 bg-emerald-500/5'
+                                }
+                                icon={
+                                  installStatus.tone === 'error' ? (
+                                    <X className="size-4 text-destructive" />
+                                  ) : (
+                                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                                  )
+                                }
+                                message={installStatus.message}
+                              />
+                            ) : null}
+                          </form>
                         ) : null}
-                      </form>
+                      </>
+                    ) : null}
+
+                    {searchParseWarning ? (
+                      <p className="mt-3 text-xs text-muted-foreground">{searchParseWarning}</p>
                     ) : null}
                   </>
                 ) : null}
-
-                {searchParseWarning ? (
-                  <p className="mt-3 text-xs text-muted-foreground">{searchParseWarning}</p>
-                ) : null}
-              </div>
-            ) : null}
+              </CommandList>
+            </Command>
           </div>
 
           {selectedPreview ? (
