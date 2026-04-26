@@ -7,15 +7,16 @@
     <title>Skills Browser</title>
     <script>
       (() => {
+        let isDark = true;
+
         try {
           const key = 'skills-browser-theme';
           const savedTheme = localStorage.getItem(key);
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
-          document.documentElement.classList.toggle('dark', isDark);
+          isDark = savedTheme ? savedTheme === 'dark' : true;
         } catch {
-          // no-op
         }
+
+        document.documentElement.classList.toggle('dark', isDark);
       })();
     </script>
   </head>
