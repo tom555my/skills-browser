@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
-import { Menu, Moon, Package, PackagePlus, RefreshCw, Settings, Sun, X } from 'lucide-react';
+import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-react';
 
 import { Button, buttonVariants } from '../components/ui/button';
 import { cn } from '../lib/utils';
@@ -121,17 +121,6 @@ function TopBar() {
             {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
 
-          <Link
-            to="/settings"
-            aria-label="Settings"
-            className={buttonVariants({
-              variant: pathname === '/settings' ? 'secondary' : 'ghost',
-              size: 'icon-sm',
-            })}
-          >
-            <Settings className="size-4" />
-          </Link>
-
           <Button
             variant="ghost"
             size="icon-sm"
@@ -166,16 +155,6 @@ function TopBar() {
               })}
             >
               Installed
-            </Link>
-            <Link
-              to="/settings"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={buttonVariants({
-                variant: pathname === '/settings' ? 'secondary' : 'ghost',
-                size: 'sm',
-              })}
-            >
-              Settings
             </Link>
           </div>
         </nav>

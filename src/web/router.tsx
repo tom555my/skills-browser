@@ -6,7 +6,6 @@ import {
   InstalledPage,
   NotFoundPage,
   RootLayout,
-  SettingsPage,
   SkillDetailsPage,
 } from './dashboard-page';
 import type { ScopeFilter } from './dashboard/types';
@@ -50,24 +49,13 @@ const installedRoute = createRoute({
   component: InstalledPage,
 });
 
-const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: 'settings',
-  component: SettingsPage,
-});
-
 const skillDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'skill/$skillId',
   component: SkillDetailsPage,
 });
 
-const routeTree = rootRoute.addChildren([
-  browseRoute,
-  installedRoute,
-  settingsRoute,
-  skillDetailsRoute,
-]);
+const routeTree = rootRoute.addChildren([browseRoute, installedRoute, skillDetailsRoute]);
 
 export const router = createRouter({
   routeTree,
