@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Menu, Moon, Package, PackagePlus, RefreshCw, Settings, Sun, X } from 'lucide-react';
 
@@ -31,6 +31,7 @@ function TopBar() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const navigate = useNavigate();
   const { isRefreshing, refresh } = useDashboardData();
 
   useEffect(() => {
@@ -49,11 +50,18 @@ function TopBar() {
 
   const openInstallDialog = () => {
     if (pathname !== '/') {
-      window.location.assign('/?install=1');
+      void navigate({
+        to: '/',
+        search: (previous) => ({ ...previous, install: '1' }),
+      });
       return;
     }
 
     window.dispatchEvent(new Event(INSTALL_DIALOG_EVENT));
+  };
+
+  const handleRefresh = () => {
+    void refresh().catch(() => undefined);
   };
 
   return (
@@ -102,7 +110,7 @@ function TopBar() {
             variant="outline"
             size="sm"
             disabled={isRefreshing}
-            onClick={() => void refresh()}
+            onClick={handleRefresh}
             aria-label="Refresh installed skills"
           >
             <RefreshCw className={cn('size-4', isRefreshing ? 'animate-spin' : undefined)} />
