@@ -17,6 +17,7 @@ import {
   type SkillsCommandAdapter,
   type InstallSkillOptions,
 } from './skills-command-adapter';
+import { loadSkillDetailsState } from './skill-details-state';
 
 type CommandAdapter = Pick<SkillsCommandAdapter, 'installSkill' | 'removeSkills' | 'updateSkills'>;
 
@@ -25,6 +26,7 @@ type CreateHonoAppOptions = {
   updateAdapter?: Pick<SkillsCommandAdapter, 'updateSkills'>;
   loadInstalledState?: typeof loadInstalledSkillsState;
   loadSearchState?: typeof loadSearchSkillsState;
+  loadSkillDetails?: typeof loadSkillDetailsState;
 };
 
 const getLaunchDirectory = () => {
@@ -202,6 +204,23 @@ const getSearchQuery = (value: unknown): string | undefined => {
   return query;
 };
 
+const getSkillDetailsUrl = (value: unknown): string | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.url !== 'string') {
+    return undefined;
+  }
+
+  const url = value.url.trim();
+  if (url.length === 0) {
+    return undefined;
+  }
+
+  return url;
+};
+
 const createDashboardPayload = async (options: {
   loadInstalledState: typeof loadInstalledSkillsState;
   previousState?: InstalledSkillsState;
@@ -226,6 +245,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
   };
   const loadInstalledState = options.loadInstalledState ?? loadInstalledSkillsState;
   const loadSearchState = options.loadSearchState ?? loadSearchSkillsState;
+  const loadDetailsState = options.loadSkillDetails ?? loadSkillDetailsState;
   const app = new Hono();
 
   app.get('/api/health', (context) => {
@@ -364,6 +384,28 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     return context.json({
       searchState: await loadSearchState(query),
     });
+  });
+
+  app.post('/api/skill-details', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const url = getSkillDetailsUrl(body);
+
+    if (!url) {
+      return context.json({ error: 'Skill details URL is required.' }, 400);
+    }
+
+    try {
+      return context.json({
+        details: await loadDetailsState(url),
+      });
+    } catch (error) {
+      return context.json(
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        400
+      );
+    }
   });
 
   return app;

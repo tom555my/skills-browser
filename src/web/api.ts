@@ -3,6 +3,7 @@ import type {
   InstallSkillsRequest,
   InstallSkillsResponse,
   InstalledSkillsState,
+  SkillDetailsPayload,
   SearchPayload,
   SkillsCommandResult,
   UpdateSkillsRequest,
@@ -95,6 +96,25 @@ const parseSearchPayload = async (response: Response): Promise<SearchPayload> =>
   }
 
   return payload as SearchPayload;
+};
+
+const parseSkillDetailsPayload = async (response: Response): Promise<SkillDetailsPayload> => {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    if (isRecord(payload) && typeof payload.error === 'string') {
+      throw new Error(payload.error);
+    }
+
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = await response.json();
+
+  if (!isRecord(payload) || !isRecord(payload.details)) {
+    throw new Error('Invalid skill details response.');
+  }
+
+  return payload as SkillDetailsPayload;
 };
 
 const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResponse> => {
@@ -246,4 +266,19 @@ export const searchSkills = async (query: string): Promise<SearchPayload> => {
   });
 
   return parseSearchPayload(response);
+};
+
+export const fetchSkillDetails = async (url: string): Promise<SkillDetailsPayload> => {
+  const response = await fetch('/api/skill-details', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      url,
+    }),
+  });
+
+  return parseSkillDetailsPayload(response);
 };
