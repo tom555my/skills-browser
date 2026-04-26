@@ -9,6 +9,15 @@ import type {
   UpdateSkillsRequest,
   UpdateSkillsResponse,
 } from '../features/skills/state';
+import {
+  mutationResponseSchema,
+  parseDashboardPayload as parseDashboardPayloadSchema,
+  parseRecord,
+  parseSearchPayload as parseSearchPayloadSchema,
+  parseSkillDetailsPayload as parseSkillDetailsPayloadSchema,
+  parseSkillsCommandResult,
+  parseUpdateSkillsResponse,
+} from '../features/skills/schemas';
 import type { SkillScope } from '../features/skills/types';
 
 const getErrorMessage = (response: Response): string => {
@@ -20,31 +29,13 @@ const parseDashboardPayload = async (response: Response): Promise<DashboardPaylo
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
+  const payload = parseDashboardPayloadSchema(await response.json());
 
-  if (!payload || typeof payload !== 'object') {
+  if (!payload) {
     throw new Error('Invalid API response.');
   }
 
-  return payload as DashboardPayload;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-const isCommandResult = (value: unknown): value is SkillsCommandResult => {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    typeof value.ok === 'boolean' &&
-    Array.isArray(value.command) &&
-    typeof value.stdout === 'string' &&
-    typeof value.stderr === 'string' &&
-    (typeof value.exitCode === 'number' || value.exitCode === null)
-  );
+  return payload;
 };
 
 export type RemoveInstalledSkillsInput = {
@@ -67,21 +58,12 @@ const parseRemoveInstalledSkillsResponse = async (
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
-
-  if (!isRecord(payload)) {
+  const parsed = mutationResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
     throw new Error('Invalid remove response.');
   }
 
-  if (!isRecord(payload.payload) || !isRecord(payload.command)) {
-    throw new Error('Invalid remove response.');
-  }
-
-  if (payload.scope !== 'project' && payload.scope !== 'global') {
-    throw new Error('Invalid remove response.');
-  }
-
-  return payload as RemoveInstalledSkillsResponse;
+  return parsed.data as RemoveInstalledSkillsResponse;
 };
 
 const parseSearchPayload = async (response: Response): Promise<SearchPayload> => {
@@ -89,80 +71,75 @@ const parseSearchPayload = async (response: Response): Promise<SearchPayload> =>
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
+  const payload = parseSearchPayloadSchema(await response.json());
 
-  if (!payload || typeof payload !== 'object') {
+  if (!payload) {
     throw new Error('Invalid API response.');
   }
 
-  return payload as SearchPayload;
+  return payload;
 };
 
 const parseSkillDetailsPayload = async (response: Response): Promise<SkillDetailsPayload> => {
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined);
-    if (isRecord(payload) && typeof payload.error === 'string') {
-      throw new Error(payload.error);
+    const error = parseRecord(payload)?.error;
+    if (typeof error === 'string') {
+      throw new Error(error);
     }
 
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
+  const payload = parseSkillDetailsPayloadSchema(await response.json());
 
-  if (!isRecord(payload) || !isRecord(payload.details)) {
+  if (!payload) {
     throw new Error('Invalid skill details response.');
   }
 
-  return payload as SkillDetailsPayload;
+  return payload;
 };
 
 const parseUpdateResponse = async (response: Response): Promise<UpdateSkillsResponse> => {
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined);
-    if (isRecord(payload) && typeof payload.error === 'string') {
-      throw new Error(payload.error);
+    const error = parseRecord(payload)?.error;
+    if (typeof error === 'string') {
+      throw new Error(error);
     }
 
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
-  if (!isRecord(payload) || (payload.scope !== 'project' && payload.scope !== 'global')) {
+  const payload = parseUpdateSkillsResponse(await response.json());
+  if (!payload) {
     throw new Error('Invalid update response.');
   }
 
-  if (!isCommandResult(payload.command)) {
+  if (!parseSkillsCommandResult(payload.command)) {
     throw new Error('Invalid update response.');
   }
 
-  return payload as UpdateSkillsResponse;
+  return payload;
 };
 
 const parseInstallResponse = async (response: Response): Promise<InstallSkillsResponse> => {
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined);
-    if (isRecord(payload) && typeof payload.error === 'string') {
-      throw new Error(payload.error);
+    const error = parseRecord(payload)?.error;
+    if (typeof error === 'string') {
+      throw new Error(error);
     }
 
     throw new Error(getErrorMessage(response));
   }
 
-  const payload = await response.json();
-  if (!isRecord(payload)) {
+  const parsed = mutationResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
     throw new Error('Invalid install response.');
   }
 
-  if (!isRecord(payload.payload) || !isCommandResult(payload.command)) {
-    throw new Error('Invalid install response.');
-  }
-
-  if (payload.scope !== 'project' && payload.scope !== 'global') {
-    throw new Error('Invalid install response.');
-  }
-
-  return payload as InstallSkillsResponse;
+  return parsed.data as InstallSkillsResponse;
 };
 
 export const fetchDashboardState = async (): Promise<DashboardPayload> => {

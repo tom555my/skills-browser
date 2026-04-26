@@ -3,6 +3,7 @@ import type {
   SearchSkillsState,
   SkillsCommandResult,
 } from '../features/skills/state';
+import { parseRecord, parseTrimmedString } from '../features/skills/schemas';
 import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
 
 type SkillsSearchAdapter = Pick<SkillsCommandAdapter, 'searchSkills'>;
@@ -31,27 +32,6 @@ const truncateOutput = (value: string): string => {
 
 const stripAnsi = (value: string): string => {
   return value.replace(ANSI_ESCAPE_PATTERN, '').replace(ANSI_OSC_PATTERN, '');
-};
-
-const normalizeString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  return trimmed;
-};
-
-const getRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
 };
 
 const createCommandFailureMessage = (query: string, result: SkillsCommandResult): string => {
@@ -123,17 +103,17 @@ const parseJsonResults = (stdout: string): SearchResultSkill[] | null => {
   const normalized: SearchResultSkill[] = [];
 
   for (const [index, item] of parsed.entries()) {
-    const record = getRecord(item);
+    const record = parseRecord(item);
     if (!record) {
       continue;
     }
 
-    const directSource = normalizeString(record.source);
-    const owner = normalizeString(record.owner);
-    const repository = normalizeString(record.repository) ?? normalizeString(record.repo);
-    const name = normalizeString(record.name) ?? normalizeString(record.skill);
-    const url = normalizeString(record.url);
-    const installs = normalizeString(record.installs) ?? normalizeString(record.installCount);
+    const directSource = parseTrimmedString(record.source);
+    const owner = parseTrimmedString(record.owner);
+    const repository = parseTrimmedString(record.repository) ?? parseTrimmedString(record.repo);
+    const name = parseTrimmedString(record.name) ?? parseTrimmedString(record.skill);
+    const url = parseTrimmedString(record.url);
+    const installs = parseTrimmedString(record.installs) ?? parseTrimmedString(record.installCount);
 
     if (directSource) {
       const parts = splitSource(directSource);
@@ -193,7 +173,7 @@ const parseTextResults = (
       continue;
     }
 
-    const metadata = normalizeString(match[4]);
+    const metadata = parseTrimmedString(match[4]);
     const installsMatch = metadata?.match(INSTALLS_PATTERN);
     const installs = installsMatch ? installsMatch[1] : undefined;
 
