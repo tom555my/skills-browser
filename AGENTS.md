@@ -1,47 +1,49 @@
-## Design Context
+## Product Context
 
-- **Users:** Developers who install and manage AI agent skills from [skills.sh](https://skills.sh/).
-- **Aesthetic:** Clean, technical, minimal developer-tool aesthetic. shadcn/ui defaults are the north star — neutral oklch palette, Inter Variable, generous whitespace, no decoration.
-- **Theme:** Light + dark mode (both first-class). Dark class toggled via `skills-browser-theme` localStorage key.
-- **Anti-patterns:** Playful, heavy, overly designed consumer aesthetics.
+- Local web UI for developers managing AI agent skills from `skills.sh` through the upstream `skills` CLI.
+- Keep `npx skills` as the source of truth; do not read skill lockfiles or canonical skill directories directly for installed state.
+- Visual language is shadcn/ui-style developer tooling: neutral oklch palette, Inter Variable, generous whitespace, light and dark modes, no playful/consumer decoration.
+- Theme is controlled by the `skills-browser-theme` localStorage key and a `dark` class on `<html>`; dark is the default when no saved theme exists.
 
 ## Commands
 
 ```bash
-bun run dev          # start dev server at localhost:1996 (Tailwind from globals.css)
-bun run build        # compile to dist/skills-browser (single binary)
-bun run test         # bun test
+bun install          # setup; Bun linker is isolated in bunfig.toml
+bun run dev          # NODE_ENV=development bun run src/cli.ts start, default localhost:1996
+bun run start        # NODE_ENV=production bun run src/cli.ts start
+bun run build        # bun build --compile ./src/cli.ts --outfile ./dist/skills-browser
 bun run lint         # oxlint src
 bun run typecheck    # tsc --noEmit
-bun run format       # oxfmt src/**/*.{ts,tsx}
+bun run test         # bun test
+bun run format       # oxfmt "src/**/*.{ts,tsx}"
 ```
 
-No CI workflow exists yet. Run `lint → typecheck → test` before committing.
+- Run a focused test with `bun test src/server/<name>.test.ts`.
+- Before committing, run `bun run lint`, then `bun run typecheck`, then `bun run test`; there are no GitHub Actions or repo hooks to catch misses.
+- The compiled binary runs as `./dist/skills-browser start`; CLI options are `--host <host>`, `--port <number>`, and `--auto`.
 
 ## Architecture
 
-Single-package Bun application. Not a monorepo.
+- Single-package Bun app, not a monorepo. Package manager is `bun@1.3.13`.
+- `src/cli.ts` is the only runtime entrypoint. It validates host/port, saves the launch cwd in `SKILLS_BROWSER_LAUNCH_CWD`, and serves the app with `Bun.serve`.
+- `src/server/hono-app.ts` owns API routes: `/api/health`, `/api/dashboard`, `/api/dashboard/refresh`, `/api/dashboard/remove`, `/api/dashboard/install`, `/api/dashboard/update`, `/api/search`, `/api/skill-details`.
+- `src/server/skills-command-adapter.ts` is the narrow server-side boundary for `npx skills`; never pass raw browser-provided shell strings through it.
+- `src/features/skills/` contains shared types, schemas, and state shapes used by both server and web.
+- `src/web/` is a client-rendered React 19 SPA. HTML entry is `src/web/index.html`; JS entry is `src/web/main.tsx`.
+- TanStack Router routes are declared manually in `src/web/router.tsx`; there is no generated route tree or SSR.
 
-- **`src/cli.ts`** — CLI entrypoint. Only command: `start`. Uses `@clack/prompts`, serves the SPA via `Bun.serve` with Hono for API routes.
-- **`src/server/`** — Hono API (`/api/health`, `/api/dashboard`, `/api/dashboard/refresh`).
-- **`src/web/`** — React 19 SPA (TanStack React Router, no SSR). HTML entry: `src/web/index.html`, JS entry: `src/web/main.tsx`.
-- **`src/web/components/ui/`** — shadcn/ui components (base-ui/react primitives + CVA).
-- **`src/web/styles/globals.css`** — Tailwind v4 source loaded directly from `index.html`.
-- **`src/features/`** — Feature modules (types + state logic), shared between server and web.
-- **`src/types/modules.d.ts`** — Declares `*.css` and `*.html` modules for TypeScript.
+## Styling And UI
 
-Build compiles to a single binary: `bun build --compile ./src/cli.ts --outfile ./dist/skills-browser`.
-
-## Key Quirks
-
-- **CSS pipeline:** Tailwind is handled by `bun-plugin-tailwind` from `globals.css`; no `generated.css` file is used.
-- **shadcn components** use `@base-ui/react` primitives (not Radix). Components live in `src/web/components/ui/`.
-- **Tailwind @source** in `globals.css` scans both `../web/` and `../../features/` for class usage.
-- **Formatter** is oxfmt (not Prettier). Config in `.oxfmtrc.json`. Sorts Tailwind classes in `cn()`/`cva()` calls.
-- **Bun linker** is set to `isolated` in `bunfig.toml`.
+- Tailwind v4 is loaded from `src/web/styles/globals.css` via a normal `<link>` in `src/web/index.html` and processed by `bun-plugin-tailwind` from `[serve.static].plugins` in `bunfig.toml`.
+- Do not add or expect a committed generated CSS file.
+- `globals.css` uses `@source "../**/*.{ts,tsx}"` and `@source "../../features/**/*.{ts,tsx}"`; classes in shared feature code can affect Tailwind output.
+- shadcn config is `components.json` with `style: "base-nova"`, `rsc: false`, Tailwind CSS at `src/web/styles/globals.css`, lucide icons, and aliases under `@/web/...`.
+- Existing shadcn UI components in `src/web/components/ui/` use `@base-ui/react` primitives, not Radix.
+- Use `cn()` from `src/web/lib/utils.ts` for class merging.
 
 ## Code Style
 
-- No comments unless asked.
-- Single quotes, semicolons, 100 char print width, trailing commas (ES5), LF line endings.
-- `cn()` utility in `src/web/lib/utils.ts` for merging Tailwind classes.
+- oxfmt, not Prettier: single quotes, semicolons, 100-column width, trailing commas where valid in ES5, LF endings.
+- `.oxfmtrc.json` sorts Tailwind classes in `cn()` and `cva()` calls, but its `sortTailwindcss.stylesheet` path currently points at stale `packages/ui/src/styles/globals.css`; do not treat that path as real app structure.
+- TypeScript is strict with `noUnusedLocals` and `noUnusedParameters`; keep test doubles and imports minimal.
+- Avoid comments unless they explain non-obvious behavior.
