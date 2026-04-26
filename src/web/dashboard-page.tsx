@@ -6,24 +6,30 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
+import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
+import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import {
   ArrowLeft,
   Check,
   CheckCircle2,
   Copy,
+  Eye,
   ExternalLink,
   FolderCode,
   Globe,
   Menu,
   Moon,
   Package,
+  PackagePlus,
   RefreshCw,
   Search,
   Settings,
   Sun,
   TerminalSquare,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Link, Outlet, useParams, useRouterState } from '@tanstack/react-router';
@@ -49,13 +55,23 @@ import {
 } from './api';
 import { Badge } from './components/ui/badge';
 import { Button, buttonVariants } from './components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './components/ui/card';
+import { Checkbox } from './components/ui/checkbox';
+import { Input } from './components/ui/input';
 import { Separator } from './components/ui/separator';
+import { Select } from './components/ui/select';
+import { Skeleton } from './components/ui/skeleton';
 import { cn } from './lib/utils';
 
 type Theme = 'light' | 'dark';
 type ScopeFilter = 'all' | SkillScope;
-type SortOption = 'relevance' | 'name' | 'updated' | 'scope';
 type InstalledTab = 'all' | SkillScope;
 type SkillDetailsTab = 'overview' | 'activity' | 'output';
 type SearchStatus = 'idle' | 'pending' | 'success' | 'empty' | 'error';
@@ -98,6 +114,7 @@ type DashboardDataValue = {
 };
 
 const THEME_STORAGE_KEY = 'skills-browser-theme';
+const INSTALL_DIALOG_EVENT = 'skills-browser:open-install-dialog';
 
 const DashboardDataContext = createContext<DashboardDataValue | null>(null);
 
@@ -107,7 +124,9 @@ export function RootLayout() {
       <div className="min-h-svh bg-background">
         <TopBar />
         <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-          <Outlet />
+          <NuqsAdapter>
+            <Outlet />
+          </NuqsAdapter>
         </main>
       </div>
     </DashboardDataProvider>
@@ -116,15 +135,9 @@ export function RootLayout() {
 
 export function BrowsePage() {
   const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
-  const [search, setSearch] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [sort, setSort] = useState<SortOption>('relevance');
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
-  const [searchCommand, setSearchCommand] = useState<SkillsCommandResult | null>(null);
   const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
   const [searchParseWarning, setSearchParseWarning] = useState<string | null>(null);
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
@@ -139,16 +152,18 @@ export function BrowsePage() {
     message: string;
   } | null>(null);
   const [installOutcome, setInstallOutcome] = useState<InstallOutcome | null>(null);
-
-  const sourceOptions = useMemo(() => {
-    const values = new Set<string>();
-
-    for (const skill of skills) {
-      values.add(skill.sourceType ?? 'unknown');
-    }
-
-    return ['all', ...Array.from(values).sort((left, right) => left.localeCompare(right))];
-  }, [skills]);
+  const installSearchInputRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useQueryState('search', parseAsString.withDefault(''));
+  const [scopeFilter, setScopeFilter] = useQueryState(
+    'scope',
+    parseAsStringEnum<ScopeFilter>(['all', 'project', 'global']).withDefault('all')
+  );
+  const [installParam, setInstallParam] = useQueryState(
+    'install',
+    parseAsString.withOptions({ history: 'push' })
+  );
+  const [searchQuery, setSearchQuery] = useQueryState('q', parseAsString.withDefault(''));
+  const [previewId, setPreviewId] = useQueryState('preview');
 
   const visibleSkills = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -156,10 +171,6 @@ export function BrowsePage() {
 
     if (scopeFilter !== 'all') {
       next = next.filter((skill) => skill.scope === scopeFilter);
-    }
-
-    if (sourceFilter !== 'all') {
-      next = next.filter((skill) => (skill.sourceType ?? 'unknown') === sourceFilter);
     }
 
     if (normalizedSearch.length > 0) {
@@ -180,46 +191,76 @@ export function BrowsePage() {
       });
     }
 
-    switch (sort) {
-      case 'name':
-        next.sort((left, right) => left.name.localeCompare(right.name));
-        break;
-      case 'updated':
-        next.sort((left, right) => {
-          const leftValue = left.activityAt ? Date.parse(left.activityAt) : 0;
-          const rightValue = right.activityAt ? Date.parse(right.activityAt) : 0;
-          return rightValue - leftValue;
-        });
-        break;
-      case 'scope':
-        next.sort((left, right) => {
-          const byScope = left.scope.localeCompare(right.scope);
-          if (byScope !== 0) {
-            return byScope;
-          }
+    next.sort((left, right) => {
+      const leftValue = left.activityAt ? Date.parse(left.activityAt) : 0;
+      const rightValue = right.activityAt ? Date.parse(right.activityAt) : 0;
 
-          return left.name.localeCompare(right.name);
-        });
-        break;
-      default:
-        next.sort((left, right) => {
-          const leftValue = left.activityAt ? Date.parse(left.activityAt) : 0;
-          const rightValue = right.activityAt ? Date.parse(right.activityAt) : 0;
+      if (leftValue !== rightValue) {
+        return rightValue - leftValue;
+      }
 
-          if (leftValue !== rightValue) {
-            return rightValue - leftValue;
-          }
-
-          return left.name.localeCompare(right.name);
-        });
-    }
+      return left.name.localeCompare(right.name);
+    });
 
     return next;
-  }, [scopeFilter, search, skills, sort, sourceFilter]);
+  }, [scopeFilter, search, skills]);
 
   const totalInstalled = payload
     ? payload.installedState.project.skills.length + payload.installedState.global.skills.length
     : 0;
+  const hasSearchResultContainer = searchStatus !== 'idle';
+  const selectedPreview = useMemo(() => {
+    if (!previewId) {
+      return null;
+    }
+
+    return searchResults.find((result) => result.id === previewId) ?? null;
+  }, [previewId, searchResults]);
+  const selectedPreviewUrl = selectedPreview?.url;
+  const isInstallDialogOpen = installParam === '1';
+
+  const openInstallDialog = useCallback(() => {
+    void setInstallParam('1');
+  }, [setInstallParam]);
+
+  const closeInstallDialog = useCallback(() => {
+    void setInstallParam(null);
+    void setPreviewId(null);
+  }, [setInstallParam, setPreviewId]);
+
+  useEffect(() => {
+    const handleOpenInstallDialog = () => openInstallDialog();
+
+    window.addEventListener(INSTALL_DIALOG_EVENT, handleOpenInstallDialog);
+
+    return () => {
+      window.removeEventListener(INSTALL_DIALOG_EVENT, handleOpenInstallDialog);
+    };
+  }, [openInstallDialog]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openInstallDialog();
+      }
+
+      if (event.key === 'Escape' && isInstallDialogOpen) {
+        closeInstallDialog();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeInstallDialog, isInstallDialogOpen, openInstallDialog]);
+
+  useEffect(() => {
+    if (!isInstallDialogOpen) {
+      return;
+    }
+
+    window.setTimeout(() => installSearchInputRef.current?.focus(), 40);
+  }, [isInstallDialogOpen, selectedPreview]);
 
   const handleCopyCommand = async (skill: BrowserSkill) => {
     try {
@@ -248,12 +289,12 @@ export function BrowsePage() {
     setSearchErrorMessage(null);
     setSearchParseWarning(null);
     setLastSearchQuery(query);
+    void setPreviewId(null);
 
     try {
       const response = await searchSkills(query);
       const nextSearchState = response.searchState;
       setSearchResults(nextSearchState.results);
-      setSearchCommand(nextSearchState.command);
       setSearchParseWarning(nextSearchState.parseWarning);
 
       if (nextSearchState.error) {
@@ -279,6 +320,11 @@ export function BrowsePage() {
   const applySearchResultSource = (source: string) => {
     setInstallSource(source);
     setInstallStatus(null);
+  };
+
+  const handlePreviewSearchResult = (result: SearchResultSkill) => {
+    void setPreviewId(result.id);
+    applySearchResultSource(result.source);
   };
 
   const handleInstall = async (event: FormEvent<HTMLFormElement>) => {
@@ -353,7 +399,49 @@ export function BrowsePage() {
   };
 
   if (isInitialLoading && !payload) {
-    return <PageLoadingState />;
+    return (
+      <div className="space-y-6">
+        <PageLoadingState />
+
+        {isInstallDialogOpen ? (
+          <div className="fixed inset-0 z-[60] p-4 sm:p-6" role="dialog" aria-modal="true">
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default bg-background/80 backdrop-blur-[2px]"
+              aria-label="Close install dialog"
+              onClick={closeInstallDialog}
+            />
+            <div className="relative mx-auto mt-[18svh] max-w-3xl animate-in fade-in zoom-in-95 duration-150">
+              <form
+                className="relative flex h-14 items-center rounded-lg border bg-popover shadow-lg"
+                onSubmit={(event) => void handleSearch(event)}
+              >
+                <Package className="pointer-events-none absolute left-4 size-5 text-foreground" />
+                <Input
+                  ref={installSearchInputRef}
+                  type="search"
+                  placeholder="Type here to search new skills"
+                  value={searchQuery}
+                  onChange={(event) => void setSearchQuery(event.target.value)}
+                  className="h-full border-0 bg-transparent px-12 text-center text-base shadow-none focus-visible:ring-0 sm:text-lg"
+                  aria-label="Search new skills"
+                />
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="absolute right-3"
+                  disabled={searchStatus === 'pending'}
+                  aria-label="Search skills"
+                >
+                  <Search className={cn('size-4', searchStatus === 'pending' && 'animate-pulse')} />
+                </Button>
+              </form>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   if (!payload) {
@@ -374,32 +462,45 @@ export function BrowsePage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Browse Skills</h1>
-        <p className="text-sm text-muted-foreground">
-          Discover and inspect installed AI agent skills from local command output.
-        </p>
-      </div>
+      <section className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Package className="size-4" />
+            <span>
+              {totalInstalled} installed skill{totalInstalled === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
+              <Button
+                key={scope}
+                size="sm"
+                variant={scopeFilter === scope ? 'secondary' : 'outline'}
+                onClick={() => void setScopeFilter(scope)}
+              >
+                {scope === 'all' ? 'All' : scopeLabel(scope)}
+              </Button>
+            ))}
+            <Button size="sm" onClick={openInstallDialog}>
+              <PackagePlus className="size-4" />
+              <span>Install skill</span>
+            </Button>
+          </div>
+        </div>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard
-          title="Project"
-          subtitle="Project scope"
-          icon={<FolderCode className="size-4" />}
-          count={payload.installedState.project.skills.length}
-        />
-        <SummaryCard
-          title="Global"
-          subtitle="Global scope"
-          icon={<Globe className="size-4" />}
-          count={payload.installedState.global.skills.length}
-        />
-        <SummaryCard
-          title="Total"
-          subtitle={`Last loaded ${formatDateTime(payload.loadedAt)}`}
-          icon={<CheckCircle2 className="size-4" />}
-          count={totalInstalled}
-        />
+        <label className="relative flex h-12 items-center rounded-lg border bg-background shadow-xs">
+          <Search className="pointer-events-none absolute left-4 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Type here to search"
+            value={search}
+            onChange={(event) => void setSearch(event.target.value)}
+            className="h-full border-0 bg-transparent px-4 pl-11 shadow-none focus-visible:ring-0"
+          />
+          <span className="pointer-events-none absolute right-4 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:block">
+            return
+          </span>
+        </label>
       </section>
 
       {errorMessage ? (
@@ -410,369 +511,358 @@ export function BrowsePage() {
         />
       ) : null}
 
-      <Card className="border shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base">Discover Skills</CardTitle>
-          <CardDescription>
-            Search registry packages via `npx skills find &lt;query&gt;`
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form
-            className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-            onSubmit={(event) => void handleSearch(event)}
-          >
-            <label className="relative flex items-center">
-              <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
-              <input
-                type="search"
-                placeholder="Search skills to install"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-3 pl-9 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                aria-label="Search skills query"
-              />
-            </label>
-            <Button type="submit" disabled={searchStatus === 'pending'}>
-              {searchStatus === 'pending' ? 'Searching' : 'Search'}
-            </Button>
-          </form>
-
-          {searchStatus === 'idle' ? (
-            <p className="text-sm text-muted-foreground">
-              Run a search to find installable skills from the upstream CLI.
-            </p>
-          ) : null}
-
-          {searchStatus === 'pending' ? (
-            <p className="text-sm text-muted-foreground">Searching for "{lastSearchQuery}"...</p>
-          ) : null}
-
-          {searchStatus === 'error' && searchErrorMessage ? (
-            <StatusBanner
-              className="border-destructive/40 bg-destructive/5"
-              icon={<X className="size-4 text-destructive" />}
-              message={searchErrorMessage}
-            />
-          ) : null}
-
-          {searchStatus === 'empty' ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No skills found for "{lastSearchQuery}".
-            </p>
-          ) : null}
-
-          {searchStatus === 'success' ? (
-            <ul className="space-y-2">
-              {searchResults.map((result) => (
-                <li key={result.id} className="rounded-lg border p-3">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-mono text-sm font-medium">{result.source}</p>
-                      {result.installs ? (
-                        <Badge variant="outline">{result.installs} installs</Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {result.owner}/{result.repository}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono">
-                        npx skills add {result.source}
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => applySearchResultSource(result.source)}
-                      >
-                        Install
-                      </Button>
-                      {result.url ? (
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                        >
-                          <ExternalLink className="size-4" />
-                          <span>Open</span>
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {searchParseWarning ? (
-            <p className="text-xs text-muted-foreground">{searchParseWarning}</p>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <SearchCommandOutputCard command={searchCommand} />
-
-      <Card className="border shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base">Install Skill</CardTitle>
-          <CardDescription>
-            Run `npx skills add` from a manual source or a selected search result.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form className="space-y-4" onSubmit={(event) => void handleInstall(event)}>
-            <div className="space-y-1.5">
-              <label htmlFor="install-source" className="text-sm font-medium">
-                Source
-              </label>
-              <input
-                id="install-source"
-                value={installSource}
-                onChange={(event) => setInstallSource(event.target.value)}
-                placeholder="owner/repo@skill-name"
-                disabled={isInstalling}
-                className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <label htmlFor="install-scope" className="text-sm font-medium">
-                  Scope
-                </label>
-                <select
-                  id="install-scope"
-                  value={installScope}
-                  disabled={isInstalling}
-                  onChange={(event) =>
-                    setInstallScope(event.target.value === 'global' ? 'global' : 'project')
-                  }
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                >
-                  <option value="project">Project</option>
-                  <option value="global">Global</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label htmlFor="install-agents" className="text-sm font-medium">
-                  Target agents
-                </label>
-                <input
-                  id="install-agents"
-                  value={installAgentsInput}
-                  onChange={(event) => setInstallAgentsInput(event.target.value)}
-                  placeholder="codex, claude"
-                  disabled={isInstalling}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                />
-                <p className="text-xs text-muted-foreground">Optional comma-separated `--agent`.</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label htmlFor="install-skills" className="text-sm font-medium">
-                  Skill filters
-                </label>
-                <input
-                  id="install-skills"
-                  value={installSkillsInput}
-                  onChange={(event) => setInstallSkillsInput(event.target.value)}
-                  placeholder="do-it, adapt"
-                  disabled={isInstalling}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                />
-                <p className="text-xs text-muted-foreground">Optional comma-separated `--skill`.</p>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={installCopy}
-                disabled={isInstalling}
-                onChange={(event) => setInstallCopy(event.target.checked)}
-                className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
-              />
-              <span>Use `--copy`</span>
-            </label>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isInstalling}
-                onClick={() => {
-                  setInstallSource('');
-                  setInstallAgentsInput('');
-                  setInstallSkillsInput('');
-                  setInstallCopy(false);
-                  setInstallStatus(null);
-                }}
-              >
-                Clear
-              </Button>
-              <Button type="submit" size="sm" disabled={isInstalling}>
-                {isInstalling ? 'Installing...' : 'Install'}
-              </Button>
-            </div>
-          </form>
-
-          {installStatus ? (
-            <StatusBanner
-              className={
-                installStatus.tone === 'error'
-                  ? 'border-destructive/40 bg-destructive/5'
-                  : 'border-emerald-500/40 bg-emerald-500/5'
-              }
-              icon={
-                installStatus.tone === 'error' ? (
-                  <X className="size-4 text-destructive" />
-                ) : (
-                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                )
-              }
-              message={installStatus.message}
-            />
-          ) : null}
-        </CardContent>
-      </Card>
-
-      {installOutcome ? <InstallOperationCard outcome={installOutcome} /> : null}
-
-      <Card className="border shadow-none">
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-            <label className="relative flex items-center">
-              <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
-              <input
-                type="search"
-                placeholder="Search skills"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-3 pl-9 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-              />
-            </label>
-
-            <select
-              value={scopeFilter}
-              onChange={(event) => setScopeFilter(event.target.value as ScopeFilter)}
-              className="h-9 min-w-30 rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-              aria-label="Filter by scope"
-            >
-              <option value="all">All scopes</option>
-              <option value="project">Project</option>
-              <option value="global">Global</option>
-            </select>
-
-            <select
-              value={sourceFilter}
-              onChange={(event) => setSourceFilter(event.target.value)}
-              className="h-9 min-w-32 rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-              aria-label="Filter by source"
-            >
-              {sourceOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === 'all' ? 'All sources' : option}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value as SortOption)}
-              className="h-9 min-w-32 rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-              aria-label="Sort skills"
-            >
-              <option value="relevance">Relevance</option>
-              <option value="updated">Recently updated</option>
-              <option value="name">Name</option>
-              <option value="scope">Scope</option>
-            </select>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            {visibleSkills.length} skill{visibleSkills.length === 1 ? '' : 's'}
-          </p>
-        </CardContent>
-      </Card>
-
       {visibleSkills.length === 0 ? (
-        <Card className="border shadow-none">
+        <Card className="mx-auto max-w-4xl border shadow-none">
           <CardHeader>
             <CardTitle className="text-base">No matching skills</CardTitle>
             <CardDescription>Adjust your filters or clear the search query.</CardDescription>
           </CardHeader>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
           {visibleSkills.map((skill) => (
-            <article
+            <Card
               key={skill.id}
-              className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent/40"
+              size="sm"
+              className="min-h-44 min-w-0 rounded-lg border shadow-none transition-colors hover:bg-accent/40"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
+              <CardHeader>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-2">
                     <Link
                       to="/skill/$skillId"
                       params={{ skillId: skill.id }}
-                      className="font-mono text-sm font-medium hover:underline"
+                      className="block truncate font-mono text-base font-medium hover:underline"
                     >
                       {skill.name}
                     </Link>
-                    <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
-                    {skill.sourceType ? <Badge variant="outline">{skill.sourceType}</Badge> : null}
-                    {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {skill.primarySource}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
+                      {skill.sourceType ? (
+                        <Badge variant="outline">{skill.sourceType}</Badge>
+                      ) : null}
+                      {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+                    </div>
                   </div>
 
-                  <p className="text-sm text-muted-foreground">{skill.description}</p>
+                  <CardAction className="static col-auto row-auto flex shrink-0 items-center gap-1 self-auto justify-self-auto">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Copy install command for ${skill.name}`}
+                      onClick={() => void handleCopyCommand(skill)}
+                    >
+                      {copiedSkillId === skill.id ? (
+                        <Check className="size-4" />
+                      ) : (
+                        <Copy className="size-4" />
+                      )}
+                    </Button>
+                    <Link
+                      to="/installed"
+                      aria-label={`Manage ${skill.name}`}
+                      className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                    >
+                      <Trash2 className="size-4" />
+                    </Link>
+                    <Link
+                      to="/skill/$skillId"
+                      params={{ skillId: skill.id }}
+                      aria-label={`Open ${skill.name} details`}
+                      className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                    >
+                      <ExternalLink className="size-4" />
+                    </Link>
+                  </CardAction>
+                </div>
+              </CardHeader>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-mono">{skill.primarySource}</span>
-                    <span className="text-border">•</span>
-                    <span>
-                      {skill.activityAt
-                        ? `Updated ${formatDateTime(skill.activityAt)}`
-                        : 'No update timestamp'}
-                    </span>
-                  </div>
-
+              <CardContent className="mt-auto flex flex-col gap-2">
+                <p className="line-clamp-2 text-sm text-muted-foreground">{skill.description}</p>
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Agents</p>
                   {skill.agents.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex min-h-8 flex-wrap gap-1.5 rounded-md border border-dashed p-1.5">
                       {skill.agents.map((agent) => (
                         <Badge key={`${skill.id}:${agent}`} variant="outline">
                           {agent}
                         </Badge>
                       ))}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="flex min-h-8 items-center rounded-md border border-dashed px-2 text-xs text-muted-foreground">
+                      No agents declared
+                    </div>
+                  )}
                 </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => void handleCopyCommand(skill)}>
-                    {copiedSkillId === skill.id ? (
-                      <Check className="size-4" />
-                    ) : (
-                      <Copy className="size-4" />
-                    )}
-                    <span>{copiedSkillId === skill.id ? 'Copied' : 'Copy install'}</span>
-                  </Button>
-                  <Link
-                    to="/skill/$skillId"
-                    params={{ skillId: skill.id }}
-                    className={buttonVariants({ variant: 'default', size: 'sm' })}
-                  >
-                    <ExternalLink className="size-4" />
-                    <span>Details</span>
-                  </Link>
-                </div>
-              </div>
-            </article>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
+
+      {installOutcome ? <InstallOperationCard outcome={installOutcome} /> : null}
+
+      {isInstallDialogOpen ? (
+        <div className="fixed inset-0 z-[60] p-4 sm:p-6" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-background/80 backdrop-blur-[2px]"
+            aria-label="Close install dialog"
+            onClick={closeInstallDialog}
+          />
+
+          <div
+            className={cn(
+              'relative mx-auto animate-in fade-in zoom-in-95 duration-150',
+              selectedPreview
+                ? 'grid h-[calc(100svh-3rem)] max-w-7xl gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]'
+                : 'mt-[18svh] max-w-3xl'
+            )}
+          >
+            <div
+              className={cn(
+                'space-y-3',
+                selectedPreview
+                  ? 'min-h-0 overflow-hidden rounded-xl border bg-popover p-3 shadow-lg'
+                  : undefined
+              )}
+            >
+              <form
+                className="relative flex h-14 items-center rounded-lg border bg-popover shadow-lg"
+                onSubmit={(event) => void handleSearch(event)}
+              >
+                <Package className="pointer-events-none absolute left-4 size-5 text-foreground" />
+                <Input
+                  ref={installSearchInputRef}
+                  type="search"
+                  placeholder="Type here to search new skills"
+                  value={searchQuery}
+                  onChange={(event) => void setSearchQuery(event.target.value)}
+                  className="h-full border-0 bg-transparent px-12 text-center text-base shadow-none focus-visible:ring-0 sm:text-lg"
+                  aria-label="Search new skills"
+                />
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="absolute right-3"
+                  disabled={searchStatus === 'pending'}
+                  aria-label="Search skills"
+                >
+                  <Search className={cn('size-4', searchStatus === 'pending' && 'animate-pulse')} />
+                </Button>
+              </form>
+
+              {hasSearchResultContainer ? (
+                <div
+                  className={cn(
+                    'animate-in fade-in slide-in-from-top-2 rounded-xl border bg-popover p-3 shadow-lg duration-200',
+                    selectedPreview ? 'max-h-[calc(100svh-8rem)] overflow-auto' : 'min-h-80'
+                  )}
+                >
+                  {searchStatus === 'pending' ? (
+                    <div className="space-y-2">
+                      <p className="px-1 text-sm text-muted-foreground">
+                        Searching for "{lastSearchQuery}"...
+                      </p>
+                      {[0, 1, 2].map((item) => (
+                        <Skeleton key={item} className="h-16 rounded-lg border" />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {searchStatus === 'error' && searchErrorMessage ? (
+                    <StatusBanner
+                      className="border-destructive/40 bg-destructive/5"
+                      icon={<X className="size-4 text-destructive" />}
+                      message={searchErrorMessage}
+                    />
+                  ) : null}
+
+                  {searchStatus === 'empty' ? (
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      No skills found for "{lastSearchQuery}".
+                    </p>
+                  ) : null}
+
+                  {searchStatus === 'success' ? (
+                    <>
+                      <ul className="space-y-2">
+                        {searchResults.map((result) => {
+                          const isViewing = selectedPreview?.id === result.id;
+
+                          return (
+                            <li key={result.id}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  'flex w-full items-center justify-between gap-3 rounded-lg border bg-background p-3 text-left transition hover:bg-accent/60',
+                                  isViewing && 'border-foreground bg-accent'
+                                )}
+                                onClick={() => handlePreviewSearchResult(result)}
+                              >
+                                <span className="min-w-0 space-y-1">
+                                  <span className="block truncate font-mono text-sm font-medium">
+                                    {result.source}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {result.owner}/{result.repository}
+                                    {result.installs ? ` · ${result.installs} installs` : ''}
+                                  </span>
+                                </span>
+                                {isViewing ? (
+                                  <Badge variant="secondary">Viewing</Badge>
+                                ) : (
+                                  <Eye className="size-4 text-muted-foreground" />
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+
+                      {selectedPreview ? (
+                        <form
+                          className="mt-3 space-y-3 rounded-lg border bg-background p-3"
+                          onSubmit={handleInstall}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-mono text-sm font-medium">
+                                {selectedPreview.source}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">Ready to add</p>
+                            </div>
+                            <Button size="sm" disabled={isInstalling} type="submit">
+                              <PackagePlus className="size-4" />
+                              <span>{isInstalling ? 'Adding' : 'Add'}</span>
+                            </Button>
+                          </div>
+
+                          <Input
+                            value={installSource}
+                            onChange={(event) => setInstallSource(event.target.value)}
+                            className="h-8 font-mono text-xs"
+                            aria-label="Install source"
+                            disabled={isInstalling}
+                          />
+
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Select
+                              value={installScope}
+                              disabled={isInstalling}
+                              onChange={(event) =>
+                                setInstallScope(
+                                  event.target.value === 'global' ? 'global' : 'project'
+                                )
+                              }
+                              className="h-8 text-xs"
+                              aria-label="Install scope"
+                            >
+                              <option value="project">Project</option>
+                              <option value="global">Global</option>
+                            </Select>
+                            <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
+                              <Checkbox
+                                checked={installCopy}
+                                disabled={isInstalling}
+                                onCheckedChange={(checked) => setInstallCopy(checked === true)}
+                                className="size-3.5"
+                              />
+                              <span>Copy files</span>
+                            </label>
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Input
+                              value={installAgentsInput}
+                              onChange={(event) => setInstallAgentsInput(event.target.value)}
+                              placeholder="Agents"
+                              disabled={isInstalling}
+                              className="h-8 text-xs"
+                            />
+                            <Input
+                              value={installSkillsInput}
+                              onChange={(event) => setInstallSkillsInput(event.target.value)}
+                              placeholder="Skill filters"
+                              disabled={isInstalling}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+
+                          {installStatus ? (
+                            <StatusBanner
+                              className={
+                                installStatus.tone === 'error'
+                                  ? 'border-destructive/40 bg-destructive/5'
+                                  : 'border-emerald-500/40 bg-emerald-500/5'
+                              }
+                              icon={
+                                installStatus.tone === 'error' ? (
+                                  <X className="size-4 text-destructive" />
+                                ) : (
+                                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                                )
+                              }
+                              message={installStatus.message}
+                            />
+                          ) : null}
+                        </form>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  {searchParseWarning ? (
+                    <p className="mt-3 text-xs text-muted-foreground">{searchParseWarning}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {selectedPreview ? (
+              <section className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg lg:block">
+                <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-medium">
+                      {selectedPreview.source}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {selectedPreviewUrl ?? 'No preview URL available'}
+                    </p>
+                  </div>
+                  {selectedPreviewUrl ? (
+                    <a
+                      href={selectedPreviewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                    >
+                      <ExternalLink className="size-4" />
+                      <span>Open</span>
+                    </a>
+                  ) : null}
+                </div>
+
+                {selectedPreviewUrl ? (
+                  <iframe
+                    src={selectedPreviewUrl}
+                    title={`${selectedPreview.source} preview`}
+                    className="h-[calc(100%-3rem)] w-full border-0 bg-background"
+                  />
+                ) : (
+                  <div className="flex h-[calc(100%-3rem)] items-center justify-center text-sm text-muted-foreground">
+                    Preview URL unavailable for this result.
+                  </div>
+                )}
+              </section>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1210,7 +1300,7 @@ export function InstalledPage() {
                 <label htmlFor="remove-scope" className="text-sm font-medium">
                   Scope
                 </label>
-                <select
+                <Select
                   id="remove-scope"
                   value={removeScope}
                   disabled={isRemoving || isUpdating}
@@ -1218,24 +1308,22 @@ export function InstalledPage() {
                     setRemoveScope(event.target.value === 'global' ? 'global' : 'project');
                     setRemoveConfirmed(false);
                   }}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                 >
                   <option value="project">Project</option>
                   <option value="global">Global</option>
-                </select>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <label htmlFor="remove-agents" className="text-sm font-medium">
                   Target agents
                 </label>
-                <input
+                <Input
                   id="remove-agents"
                   value={removeAgentsInput}
                   disabled={isRemoving || isUpdating}
                   onChange={(event) => setRemoveAgentsInput(event.target.value)}
                   placeholder="codex, claude"
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                 />
                 <p className="text-xs text-muted-foreground">
                   Optional comma-separated values for `--agent`.
@@ -1259,12 +1347,11 @@ export function InstalledPage() {
             </div>
 
             <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={removeConfirmed}
                 disabled={isRemoving || isUpdating}
-                onChange={(event) => setRemoveConfirmed(event.target.checked)}
-                className="mt-0.5 size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+                onCheckedChange={(checked) => setRemoveConfirmed(checked === true)}
+                className="mt-0.5"
               />
               <span>
                 I confirm removing {selectedNamesForScope.length} selected skill
@@ -1378,12 +1465,10 @@ export function InstalledPage() {
                 <li key={skill.id} className="rounded-lg border p-3">
                   <div className="flex flex-wrap items-start gap-3">
                     <label className="flex h-8 items-center">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedSkills.has(skill.id)}
                         disabled={isRemoving || isUpdating}
-                        onChange={() => toggleSkill(skill.id)}
-                        className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+                        onCheckedChange={() => toggleSkill(skill.id)}
                         aria-label={`Select ${skill.name}`}
                       />
                     </label>
@@ -1459,10 +1544,10 @@ export function SettingsPage() {
             <label htmlFor="registry-url" className="text-sm font-medium">
               Registry URL
             </label>
-            <input
+            <Input
               id="registry-url"
               defaultValue="https://registry.skills.sh"
-              className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">
               The skills registry to fetch packages from
@@ -1473,11 +1558,7 @@ export function SettingsPage() {
             <label htmlFor="cache-dir" className="text-sm font-medium">
               Cache Directory
             </label>
-            <input
-              id="cache-dir"
-              defaultValue="~/.skills/cache"
-              className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-            />
+            <Input id="cache-dir" defaultValue="~/.skills/cache" className="font-mono" />
             <p className="text-xs text-muted-foreground">
               Local directory for caching skill packages
             </p>
@@ -1487,16 +1568,12 @@ export function SettingsPage() {
             <label htmlFor="default-shell" className="text-sm font-medium">
               Default Shell
             </label>
-            <select
-              id="default-shell"
-              defaultValue="zsh"
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-            >
+            <Select id="default-shell" defaultValue="zsh">
               <option value="bash">Bash</option>
               <option value="zsh">Zsh</option>
               <option value="fish">Fish</option>
               <option value="powershell">PowerShell</option>
-            </select>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -1780,6 +1857,15 @@ function TopBar() {
     setTheme(nextTheme);
   };
 
+  const openInstallDialog = () => {
+    if (pathname !== '/') {
+      window.location.assign('/?install=1');
+      return;
+    }
+
+    window.dispatchEvent(new Event(INSTALL_DIALOG_EVENT));
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -1812,6 +1898,16 @@ function TopBar() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openInstallDialog}
+            aria-label="Install a skill"
+          >
+            <PackagePlus className="size-4" />
+            <span className="hidden sm:inline">Install</span>
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -2114,46 +2210,6 @@ function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) {
   );
 }
 
-function SearchCommandOutputCard(props: { command: SkillsCommandResult | null }) {
-  const { command } = props;
-
-  return (
-    <Card className="border shadow-none">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <TerminalSquare className="size-4" />
-          Search Command Output
-        </CardTitle>
-        <CardDescription>Latest `npx skills find` output</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {command ? (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <code className="rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs break-all">
-                {command.command.join(' ')}
-              </code>
-              <Badge variant={command.ok ? 'secondary' : 'destructive'}>
-                {command.ok ? 'Succeeded' : 'Failed'}
-              </Badge>
-            </div>
-
-            {command.stdout.trim() ? (
-              <OutputBlock label="stdout" value={command.stdout} />
-            ) : (
-              <p className="text-xs text-muted-foreground">No stdout output.</p>
-            )}
-
-            {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
-          </>
-        ) : (
-          <p className="text-xs text-muted-foreground">No search command output available yet.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function CommandOutputCard(props: { scope: SkillScope; scopeState: InstalledSkillsScopeState }) {
   const { scope, scopeState } = props;
   const command = scopeState.command;
@@ -2219,13 +2275,13 @@ function OutputBlock(props: { label: string; value: string }) {
 function PageLoadingState() {
   return (
     <div className="space-y-4">
-      <div className="h-16 animate-pulse rounded-lg border bg-muted/40" />
+      <Skeleton className="h-16 rounded-lg border" />
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="h-24 animate-pulse rounded-lg border bg-muted/40" />
-        <div className="h-24 animate-pulse rounded-lg border bg-muted/40" />
-        <div className="h-24 animate-pulse rounded-lg border bg-muted/40" />
+        <Skeleton className="h-24 rounded-lg border" />
+        <Skeleton className="h-24 rounded-lg border" />
+        <Skeleton className="h-24 rounded-lg border" />
       </div>
-      <div className="h-72 animate-pulse rounded-lg border bg-muted/40" />
+      <Skeleton className="h-72 rounded-lg border" />
     </div>
   );
 }
@@ -2245,12 +2301,7 @@ function SettingsSwitch(props: {
         <span className="text-sm font-medium">{props.title}</span>
         <p className="text-sm text-muted-foreground">{props.description}</p>
       </div>
-      <input
-        id={props.id}
-        type="checkbox"
-        defaultChecked={props.defaultChecked}
-        className="size-4 rounded border-input text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
-      />
+      <Checkbox id={props.id} defaultChecked={props.defaultChecked} />
     </label>
   );
 }
