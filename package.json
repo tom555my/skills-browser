@@ -20,6 +20,7 @@
     "@base-ui/react": "^1.4.1",
     "@clack/prompts": "^0.10.1",
     "@fontsource-variable/inter": "^5.2.8",
+    "@tanstack/react-query": "^5.100.5",
     "@tanstack/react-router": "^1.132.0",
     "bun-plugin-tailwind": "^0.1.2",
     "class-variance-authority": "^0.7.1",
