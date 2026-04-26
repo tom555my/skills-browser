@@ -4,6 +4,12 @@ import type {
   InstalledSkillsState,
   SkillsCommandResult,
 } from '../features/skills/state';
+import {
+  parseRecord,
+  parseSkillScope,
+  parseStringArray,
+  parseTrimmedString,
+} from '../features/skills/schemas';
 import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-command-adapter';
 
 type SkillsListAdapter = Pick<SkillsCommandAdapter, 'listSkills'>;
@@ -43,41 +49,8 @@ const truncateOutput = (value: string): string => {
   return `${value.slice(0, MAX_OUTPUT_SNIPPET_LENGTH)}...`;
 };
 
-const normalizeString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  return trimmed;
-};
-
-const normalizeStringArray = (value: unknown): string[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.map(normalizeString).filter((item): item is string => item !== undefined);
-};
-
 const getScope = (value: unknown, fallbackScope: SkillScope): SkillScope => {
-  if (value === 'project' || value === 'global') {
-    return value;
-  }
-
-  return fallbackScope;
-};
-
-const getRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
+  return parseSkillScope(value) ?? fallbackScope;
 };
 
 const createInstalledSkillId = (input: {
@@ -155,24 +128,24 @@ const normalizeInstalledSkills = (input: {
   const normalized: InstalledSkill[] = [];
 
   for (const [index, item] of parsed.entries()) {
-    const record = getRecord(item);
+    const record = parseRecord(item);
     if (!record) {
       continue;
     }
 
-    const name = normalizeString(record.name);
+    const name = parseTrimmedString(record.name);
     if (!name) {
       continue;
     }
 
     const scope = getScope(record.scope, input.scope);
-    const path = normalizeString(record.path);
-    const source = normalizeString(record.source);
-    const sourceType = normalizeString(record.sourceType);
-    const ref = normalizeString(record.ref);
-    const installedAt = normalizeString(record.installedAt);
-    const updatedAt = normalizeString(record.updatedAt);
-    const agents = normalizeStringArray(record.agents);
+    const path = parseTrimmedString(record.path);
+    const source = parseTrimmedString(record.source);
+    const sourceType = parseTrimmedString(record.sourceType);
+    const ref = parseTrimmedString(record.ref);
+    const installedAt = parseTrimmedString(record.installedAt);
+    const updatedAt = parseTrimmedString(record.updatedAt);
+    const agents = parseStringArray(record.agents);
 
     normalized.push({
       id: createInstalledSkillId({ scope, name, path, source, index }),

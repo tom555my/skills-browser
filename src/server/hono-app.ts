@@ -3,12 +3,18 @@ import { Hono } from 'hono';
 import type {
   DashboardPayload,
   InstallSkillsResponse,
-  InstalledSkillsScopeState,
   InstalledSkillsState,
   SkillsCommandResult,
   UpdateSkillsRequest,
   UpdateSkillsResponse,
 } from '../features/skills/state';
+import {
+  parseInstalledSkillsState,
+  parseRecord,
+  parseSkillScope,
+  parseStringArray,
+  parseTrimmedString,
+} from '../features/skills/schemas';
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
 import { loadSearchSkillsState } from './search-skills-state';
@@ -38,58 +44,13 @@ const getLaunchDirectory = () => {
   return process.cwd();
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-const normalizeStringArray = (value: unknown): string[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter((item) => item.length > 0);
-};
-
-const isScope = (value: unknown): value is SkillScope => {
-  return value === 'project' || value === 'global';
-};
-
-const isScopeState = (value: unknown): value is InstalledSkillsScopeState => {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    (value.scope === 'project' || value.scope === 'global') &&
-    Array.isArray(value.skills) &&
-    typeof value.stale === 'boolean' &&
-    (typeof value.lastSuccessfulAt === 'string' || value.lastSuccessfulAt === null) &&
-    (typeof value.error === 'string' || value.error === null) &&
-    (value.command === null || isRecord(value.command))
-  );
-};
-
-const isInstalledState = (value: unknown): value is InstalledSkillsState => {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return isScopeState(value.project) && isScopeState(value.global);
-};
-
 const getPreviousState = (value: unknown): InstalledSkillsState | undefined => {
-  if (!isRecord(value)) {
+  const record = parseRecord(value);
+  if (!record) {
     return undefined;
   }
 
-  const previousState = value.previousState;
-  if (!isInstalledState(previousState)) {
-    return undefined;
-  }
-
-  return previousState;
+  return parseInstalledSkillsState(record.previousState);
 };
 
 type RemoveDashboardRequest = {
@@ -105,66 +66,64 @@ type InstallDashboardRequest = InstallSkillOptions & {
 };
 
 const getUpdateDashboardRequest = (value: unknown): UpdateSkillsRequest | null => {
-  if (!isRecord(value) || !isScope(value.scope)) {
+  const record = parseRecord(value);
+  const scope = parseSkillScope(record?.scope);
+  if (!record || !scope) {
     return null;
   }
 
-  if (!('names' in value)) {
+  if (!('names' in record)) {
     return {
-      scope: value.scope,
+      scope,
     };
   }
 
-  const names = normalizeStringArray(value.names);
+  const names = parseStringArray(record.names);
   if (names.length === 0) {
     return null;
   }
 
   return {
-    scope: value.scope,
+    scope,
     names,
   };
 };
 
 const getRemoveDashboardRequest = (value: unknown): RemoveDashboardRequest | null => {
-  if (!isRecord(value)) {
+  const record = parseRecord(value);
+  const scope = parseSkillScope(record?.scope);
+  if (!record || !scope) {
     return null;
   }
 
-  if (!isScope(value.scope)) {
-    return null;
-  }
-
-  const names = normalizeStringArray(value.names);
+  const names = parseStringArray(record.names);
   if (names.length === 0) {
     return null;
   }
 
   return {
     names,
-    scope: value.scope,
-    agents: normalizeStringArray(value.agents),
-    previousState: getPreviousState(value),
+    scope,
+    agents: parseStringArray(record.agents),
+    previousState: getPreviousState(record),
   };
 };
 
 const getInstallDashboardRequest = (value: unknown): InstallDashboardRequest | null => {
-  if (!isRecord(value) || !isScope(value.scope) || typeof value.source !== 'string') {
-    return null;
-  }
-
-  const source = value.source.trim();
-  if (source.length === 0) {
+  const record = parseRecord(value);
+  const scope = parseSkillScope(record?.scope);
+  const source = parseTrimmedString(record?.source);
+  if (!record || !scope || !source) {
     return null;
   }
 
   return {
     source,
-    scope: value.scope,
-    agents: normalizeStringArray(value.agents),
-    skills: normalizeStringArray(value.skills),
-    copy: value.copy === true,
-    previousState: getPreviousState(value),
+    scope,
+    agents: parseStringArray(record.agents),
+    skills: parseStringArray(record.skills),
+    copy: record.copy === true,
+    previousState: getPreviousState(record),
   };
 };
 
@@ -188,37 +147,11 @@ const createOperationFailureMessage = (result: SkillsCommandResult): string => {
 const defaultCommandAdapter = createSkillsCommandAdapter();
 
 const getSearchQuery = (value: unknown): string | undefined => {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  if (typeof value.query !== 'string') {
-    return undefined;
-  }
-
-  const query = value.query.trim();
-  if (query.length === 0) {
-    return undefined;
-  }
-
-  return query;
+  return parseTrimmedString(parseRecord(value)?.query);
 };
 
 const getSkillDetailsUrl = (value: unknown): string | undefined => {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  if (typeof value.url !== 'string') {
-    return undefined;
-  }
-
-  const url = value.url.trim();
-  if (url.length === 0) {
-    return undefined;
-  }
-
-  return url;
+  return parseTrimmedString(parseRecord(value)?.url);
 };
 
 const createDashboardPayload = async (options: {
