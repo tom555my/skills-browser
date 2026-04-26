@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from '@tanstack/react-router';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import {
+  BookOpenText,
   Check,
   CheckCircle2,
   Copy,
@@ -13,10 +14,15 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
-import type { InstallSkillsResponse, SearchResultSkill } from '../../features/skills/state';
+import type {
+  InstallSkillsResponse,
+  SearchResultSkill,
+  SkillDetailsState,
+} from '../../features/skills/state';
 import type { SkillScope } from '../../features/skills/types';
-import { installDashboardSkills, searchSkills } from '../api';
+import { fetchSkillDetails, installDashboardSkills, searchSkills } from '../api';
 import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';
 import {
@@ -142,6 +148,15 @@ export function BrowsePage() {
   }, [previewId, searchResults]);
   const selectedPreviewUrl = selectedPreview?.url;
   const isInstallDialogOpen = installParam === '1';
+  const {
+    data: selectedPreviewDetailsPayload,
+    error: selectedPreviewDetailsError,
+    isPending: isSelectedPreviewDetailsPending,
+  } = useQuery({
+    queryKey: ['skill-details', selectedPreviewUrl],
+    queryFn: async () => fetchSkillDetails(selectedPreviewUrl ?? ''),
+    enabled: isInstallDialogOpen && Boolean(selectedPreviewUrl),
+  });
 
   const openInstallDialog = useCallback(() => {
     void setInstallParam('1');
@@ -782,21 +797,221 @@ export function BrowsePage() {
                 ) : null}
               </div>
 
-              {selectedPreviewUrl ? (
-                <iframe
-                  src={selectedPreviewUrl}
-                  title={`${selectedPreview.source} preview`}
-                  className="h-[calc(100%-3rem)] w-full border-0 bg-background"
-                />
-              ) : (
-                <div className="flex h-[calc(100%-3rem)] items-center justify-center text-sm text-muted-foreground">
-                  Preview URL unavailable for this result.
-                </div>
-              )}
+              <SkillSearchPreview
+                result={selectedPreview}
+                details={selectedPreviewDetailsPayload?.details ?? null}
+                isLoading={Boolean(selectedPreviewUrl) && isSelectedPreviewDetailsPending}
+                errorMessage={
+                  selectedPreviewDetailsError
+                    ? getErrorMessage(selectedPreviewDetailsError)
+                    : selectedPreviewUrl
+                      ? null
+                      : 'Preview URL unavailable for this result.'
+                }
+              />
             </section>
           ) : null}
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function SkillSearchPreview({
+  result,
+  details,
+  isLoading,
+  errorMessage,
+}: {
+  result: SearchResultSkill;
+  details: SkillDetailsState | null;
+  isLoading: boolean;
+  errorMessage: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <div className="h-[calc(100%-3rem)] overflow-y-auto bg-background p-6">
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+          </div>
+          <Skeleton className="h-44" />
+          <Skeleton className="h-72" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!details) {
+    return (
+      <div className="flex h-[calc(100%-3rem)] items-center justify-center bg-background p-6">
+        <div className="max-w-sm space-y-2 text-center">
+          <BookOpenText className="mx-auto size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">Details unavailable</p>
+          <p className="text-sm text-muted-foreground">
+            {errorMessage ?? 'This result does not expose a skills.sh detail page.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const installCommand = details.installCommand ?? `npx skills add ${result.source}`;
+
+  return (
+    <div className="h-[calc(100%-3rem)] overflow-y-auto bg-background">
+      <div className="grid gap-8 p-6 xl:grid-cols-[minmax(0,1fr)_13rem]">
+        <main className="min-w-0 space-y-8">
+          <section className="space-y-3">
+            <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <span className="truncate">skills</span>
+              <span>/</span>
+              <span className="truncate">{result.owner}</span>
+              <span>/</span>
+              <span className="truncate">{result.repository}</span>
+              <span>/</span>
+              <span className="truncate text-foreground">{details.title}</span>
+            </div>
+            <h2 className="truncate font-mono text-3xl font-semibold tracking-tight">
+              {details.title}
+            </h2>
+            {details.description ? (
+              <p className="text-sm leading-6 text-muted-foreground">{details.description}</p>
+            ) : null}
+          </section>
+
+          <section className="space-y-3">
+            <SectionLabel>Installation</SectionLabel>
+            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 font-mono text-sm">
+              <span className="text-muted-foreground">$</span>
+              <code className="min-w-0 flex-1 truncate">{installCommand}</code>
+            </div>
+          </section>
+
+          {details.summaryHtml ? (
+            <section className="space-y-3">
+              <SectionLabel>Summary</SectionLabel>
+              <div className="rounded-lg border bg-muted/50 px-5 py-4">
+                <SkillHtmlContent html={details.summaryHtml} compact />
+              </div>
+            </section>
+          ) : null}
+
+          {details.readmeHtml ? (
+            <section className="space-y-3">
+              <SectionLabel>SKILL.md</SectionLabel>
+              <SkillHtmlContent html={details.readmeHtml} />
+            </section>
+          ) : null}
+        </main>
+
+        <aside className="space-y-5 xl:border-l xl:pl-6">
+          <PreviewStat label="Weekly Installs" value={details.weeklyInstalls ?? result.installs} />
+          <PreviewStat
+            label="Repository"
+            value={details.repository}
+            href={details.repositoryUrl ?? undefined}
+          />
+          <PreviewStat label="GitHub Stars" value={details.githubStars} />
+          <PreviewStat label="First Seen" value={details.firstSeen} />
+
+          {details.audits.length > 0 ? (
+            <section className="space-y-3">
+              <SectionLabel>Security Audits</SectionLabel>
+              <div className="divide-y rounded-md border">
+                {details.audits.map((audit) => (
+                  <a
+                    key={audit.url}
+                    href={audit.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted/60"
+                  >
+                    <span className="truncate">{audit.name}</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        audit.status.toLowerCase() === 'pass' &&
+                          'border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+                        audit.status.toLowerCase() === 'warn' &&
+                          'border-amber-500/30 text-amber-600 dark:text-amber-400'
+                      )}
+                    >
+                      {audit.status}
+                    </Badge>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div className="border-b pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+function PreviewStat({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string | null;
+  href?: string;
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <section className="space-y-1.5">
+      <SectionLabel>{label}</SectionLabel>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="block break-all font-mono text-sm hover:underline"
+        >
+          {value}
+        </a>
+      ) : (
+        <p className="font-mono text-sm">{value}</p>
+      )}
+    </section>
+  );
+}
+
+function SkillHtmlContent({ html, compact = false }: { html: string; compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'min-w-0 space-y-3 text-sm leading-6 text-muted-foreground',
+        '[&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4',
+        '[&_code]:rounded-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-foreground',
+        '[&_h1]:font-mono [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:text-foreground',
+        '[&_h2]:pt-3 [&_h2]:font-mono [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-foreground',
+        '[&_h3]:pt-2 [&_h3]:font-mono [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground',
+        '[&_li]:ml-5 [&_li]:pl-1 [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-muted/60 [&_pre]:p-3 [&_pre]:text-foreground [&_ul]:list-disc',
+        '[&_strong]:font-medium [&_strong]:text-foreground [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:text-foreground',
+        compact && '[&_p:first-child]:font-medium [&_p:first-child]:text-foreground'
+      )}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }

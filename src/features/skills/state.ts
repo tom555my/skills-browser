@@ -51,6 +51,32 @@ export type SearchPayload = {
   searchState: SearchSkillsState;
 };
 
+export type SkillAuditResult = {
+  name: string;
+  status: string;
+  url: string;
+};
+
+export type SkillDetailsState = {
+  title: string;
+  description: string | null;
+  canonicalUrl: string;
+  installCommand: string | null;
+  summaryHtml: string | null;
+  readmeHtml: string | null;
+  weeklyInstalls: string | null;
+  repository: string | null;
+  repositoryUrl: string | null;
+  githubStars: string | null;
+  firstSeen: string | null;
+  audits: SkillAuditResult[];
+  fetchedAt: string;
+};
+
+export type SkillDetailsPayload = {
+  details: SkillDetailsState;
+};
+
 export type UpdateSkillsRequest = {
   scope: SkillScope;
   names?: string[];
