@@ -5,7 +5,6 @@ import type { InstalledSkillsScopeState, UpdateSkillsResponse } from '../../feat
 import type { SkillScope } from '../../features/skills/types';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Checkbox } from '../components/ui/checkbox';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import type { InstallOutcome, RemoveOutcome } from './types';
@@ -234,26 +233,6 @@ export function PageLoadingState() {
       </div>
       <Skeleton className="h-72 rounded-lg border" />
     </div>
-  );
-}
-
-export function SettingsSwitch(props: {
-  id: string;
-  title: string;
-  description: string;
-  defaultChecked?: boolean;
-}) {
-  return (
-    <label
-      htmlFor={props.id}
-      className="flex items-center justify-between gap-3 rounded-lg border p-3"
-    >
-      <div className="space-y-0.5">
-        <span className="text-sm font-medium">{props.title}</span>
-        <p className="text-sm text-muted-foreground">{props.description}</p>
-      </div>
-      <Checkbox id={props.id} defaultChecked={props.defaultChecked} />
-    </label>
   );
 }
 
