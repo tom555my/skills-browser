@@ -26,6 +26,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "evlog": "^2.14.0",
     "hono": "^4.10.0",
     "lucide-react": "^1.8.0",
     "nuqs": "^2.8.9",

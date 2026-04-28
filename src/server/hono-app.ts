@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { initLogger } from 'evlog';
+import { evlog, type EvlogVariables } from 'evlog/hono';
 
 import type {
   DashboardPayload,
@@ -64,6 +66,15 @@ type InstallDashboardRequest = InstallSkillOptions & {
   scope: SkillScope;
   previousState?: InstalledSkillsState;
 };
+
+initLogger({
+  env: {
+    service: 'skills-browser',
+    environment: process.env.NODE_ENV ?? 'development',
+  },
+  drain: process.env.NODE_ENV === 'test' ? () => {} : undefined,
+  silent: process.env.NODE_ENV === 'test',
+});
 
 const getUpdateDashboardRequest = (value: unknown): UpdateSkillsRequest | null => {
   const record = parseRecord(value);
@@ -179,7 +190,19 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
   const loadInstalledState = options.loadInstalledState ?? loadInstalledSkillsState;
   const loadSearchState = options.loadSearchState ?? loadSearchSkillsState;
   const loadDetailsState = options.loadSkillDetails ?? loadSkillDetailsState;
-  const app = new Hono();
+  const app = new Hono<EvlogVariables>();
+
+  app.use(
+    evlog({
+      include: ['/api/**'],
+      exclude: ['/api/health'],
+      routes: {
+        '/api/dashboard/**': { service: 'skills-browser-dashboard' },
+        '/api/search': { service: 'skills-browser-search' },
+        '/api/skill-details': { service: 'skills-browser-skill-details' },
+      },
+    })
+  );
 
   app.get('/api/health', (context) => {
     return context.json({ ok: true });
@@ -219,6 +242,15 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       );
     }
 
+    context.get('log').set({
+      dashboard: {
+        operation: 'remove',
+        scope: request.scope,
+        skillCount: request.names.length,
+        agentCount: request.agents.length,
+      },
+    });
+
     const command = await commandAdapter.removeSkills({
       names: request.names,
       scope: request.scope,
@@ -257,6 +289,16 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       );
     }
 
+    context.get('log').set({
+      dashboard: {
+        operation: 'install',
+        scope: request.scope,
+        agentCount: request.agents?.length ?? 0,
+        skillCount: request.skills?.length ?? 0,
+        copy: request.copy,
+      },
+    });
+
     const command = await commandAdapter.installSkill({
       source: request.source,
       scope: request.scope,
@@ -293,6 +335,15 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       return context.json({ error: 'Invalid update request.' }, 400);
     }
 
+    context.get('log').set({
+      dashboard: {
+        operation: 'update',
+        scope: request.scope,
+        skillCount: request.names?.length ?? 0,
+        updateAll: !request.names,
+      },
+    });
+
     const command = await commandAdapter.updateSkills({
       scope: request.scope,
       names: request.names,
@@ -314,6 +365,12 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       return context.json({ error: 'Search query is required.' }, 400);
     }
 
+    context.get('log').set({
+      search: {
+        queryLength: query.length,
+      },
+    });
+
     return context.json({
       searchState: await loadSearchState(query),
     });
@@ -326,6 +383,12 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     if (!url) {
       return context.json({ error: 'Skill details URL is required.' }, 400);
     }
+
+    context.get('log').set({
+      skillDetails: {
+        urlLength: url.length,
+      },
+    });
 
     try {
       return context.json({
