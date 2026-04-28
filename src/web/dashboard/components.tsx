@@ -5,6 +5,7 @@ import type { InstalledSkillsScopeState, UpdateSkillsResponse } from '../../feat
 import type { SkillScope } from '../../features/skills/types';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { DotmSquare3 } from '../components/ui/dotm-square-3';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import type { InstallOutcome, RemoveOutcome } from './types';
@@ -225,9 +226,43 @@ export function OutputBlock(props: { label: string; value: string }) {
   );
 }
 
+export function LoadingGlyph(props: {
+  label?: string;
+  className?: string;
+  size?: number;
+  dotSize?: number;
+}) {
+  return (
+    <DotmSquare3
+      ariaLabel={props.label ?? 'Loading'}
+      className={cn('shrink-0', props.className)}
+      color="currentColor"
+      dotSize={props.dotSize ?? 3}
+      size={props.size ?? 18}
+    />
+  );
+}
+
+export function LoadingIndicator(props: { label: string; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'inline-flex items-center gap-2 text-sm font-medium text-muted-foreground',
+        props.className
+      )}
+    >
+      <LoadingGlyph label={props.label} />
+      <span>{props.label}</span>
+    </div>
+  );
+}
+
 export function PageLoadingState() {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex min-h-20 items-center justify-center rounded-lg border bg-card">
+        <LoadingIndicator label="Loading skills" />
+      </div>
       <Skeleton className="h-16 rounded-lg border" />
       <div className="grid gap-3 sm:grid-cols-3">
         <Skeleton className="h-24 rounded-lg border" />

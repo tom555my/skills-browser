@@ -4,8 +4,8 @@ import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-react';
 
 import { Button, buttonVariants } from '../components/ui/button';
-import { cn } from '../lib/utils';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
+import { LoadingGlyph } from './components';
 import { DashboardDataProvider, useDashboardData } from './data';
 import type { Theme } from './types';
 import { getThemeFromDom } from './utils';
@@ -113,7 +113,11 @@ function TopBar() {
             onClick={handleRefresh}
             aria-label="Refresh installed skills"
           >
-            <RefreshCw className={cn('size-4', isRefreshing ? 'animate-spin' : undefined)} />
+            {isRefreshing ? (
+              <LoadingGlyph label="Refreshing installed skills" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
             <span>{isRefreshing ? 'Refreshing' : 'Refresh'}</span>
           </Button>
 
