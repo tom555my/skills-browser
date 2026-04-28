@@ -3,7 +3,6 @@ import { createRootRoute, createRoute, createRouter } from '@tanstack/react-rout
 import {
   BrowsePage,
   ErrorPage,
-  InstalledPage,
   NotFoundPage,
   RootLayout,
   SkillDetailsPage,
@@ -43,19 +42,13 @@ const browseRoute = createRoute({
   component: BrowsePage,
 });
 
-const installedRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: 'installed',
-  component: InstalledPage,
-});
-
 const skillDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'skill/$skillId',
   component: SkillDetailsPage,
 });
 
-const routeTree = rootRoute.addChildren([browseRoute, installedRoute, skillDetailsRoute]);
+const routeTree = rootRoute.addChildren([browseRoute, skillDetailsRoute]);
 
 export const router = createRouter({
   routeTree,

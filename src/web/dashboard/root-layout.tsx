@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { parseAsStringEnum, useQueryState } from 'nuqs';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-react';
 
@@ -7,19 +8,19 @@ import { Button, buttonVariants } from '../components/ui/button';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
 import { LoadingGlyph } from './components';
 import { DashboardDataProvider, useDashboardData } from './data';
-import type { Theme } from './types';
-import { getThemeFromDom } from './utils';
+import type { ScopeFilter, Theme } from './types';
+import { getThemeFromDom, scopeLabel } from './utils';
 
 export function RootLayout() {
   return (
     <DashboardDataProvider>
       <div className="min-h-svh bg-background">
-        <TopBar />
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-          <NuqsAdapter>
+        <NuqsAdapter>
+          <TopBar />
+          <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
             <Outlet />
-          </NuqsAdapter>
-        </main>
+          </main>
+        </NuqsAdapter>
       </div>
     </DashboardDataProvider>
   );
@@ -33,12 +34,17 @@ function TopBar() {
   });
   const navigate = useNavigate();
   const { isRefreshing, refresh } = useDashboardData();
+  const [scopeFilter, setScopeFilter] = useQueryState(
+    'scope',
+    parseAsStringEnum<ScopeFilter>(['all', 'project', 'global']).withDefault('all')
+  );
 
   useEffect(() => {
     setTheme(getThemeFromDom());
   }, []);
 
   const isBrowseActive = pathname === '/' || pathname.startsWith('/skill/');
+  const showScopeFilter = pathname === '/';
 
   const toggleTheme = () => {
     const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -83,19 +89,26 @@ function TopBar() {
             >
               Browse
             </Link>
-            <Link
-              to="/installed"
-              className={buttonVariants({
-                variant: pathname === '/installed' ? 'secondary' : 'ghost',
-                size: 'sm',
-              })}
-            >
-              Installed
-            </Link>
           </nav>
         </div>
 
         <div className="flex items-center gap-2">
+          {showScopeFilter ? (
+            <div className="hidden items-center rounded-md border bg-background p-0.5 md:flex">
+              {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
+                <Button
+                  key={scope}
+                  size="sm"
+                  variant={scopeFilter === scope ? 'secondary' : 'ghost'}
+                  className="h-8 px-3"
+                  onClick={() => void setScopeFilter(scope)}
+                >
+                  {scope === 'all' ? 'All' : scopeLabel(scope)}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
           <Button
             variant="outline"
             size="sm"
@@ -150,16 +163,23 @@ function TopBar() {
             >
               Browse
             </Link>
-            <Link
-              to="/installed"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={buttonVariants({
-                variant: pathname === '/installed' ? 'secondary' : 'ghost',
-                size: 'sm',
-              })}
-            >
-              Installed
-            </Link>
+            {showScopeFilter ? (
+              <div className="mt-2 grid grid-cols-3 gap-1 rounded-md border bg-background p-1">
+                {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
+                  <Button
+                    key={scope}
+                    size="sm"
+                    variant={scopeFilter === scope ? 'secondary' : 'ghost'}
+                    onClick={() => {
+                      void setScopeFilter(scope);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    {scope === 'all' ? 'All' : scopeLabel(scope)}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </nav>
       ) : null}

@@ -20,7 +20,6 @@ import {
   Package,
   PackagePlus,
   Search,
-  Trash2,
   X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -107,7 +106,7 @@ export function BrowsePage() {
   const [installOutcome, setInstallOutcome] = useState<InstallOutcome | null>(null);
   const installSearchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useQueryState('search', parseAsString.withDefault(''));
-  const [scopeFilter, setScopeFilter] = useQueryState(
+  const [scopeFilter] = useQueryState(
     'scope',
     parseAsStringEnum<ScopeFilter>(['all', 'project', 'global']).withDefault('all')
   );
@@ -448,25 +447,13 @@ export function BrowsePage() {
               {totalInstalled} installed skill{totalInstalled === 1 ? '' : 's'}
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
-              <Button
-                key={scope}
-                size="sm"
-                variant={scopeFilter === scope ? 'secondary' : 'outline'}
-                onClick={() => void setScopeFilter(scope)}
-              >
-                {scope === 'all' ? 'All' : scopeLabel(scope)}
-              </Button>
-            ))}
-            <Button size="sm" onClick={openInstallDialog}>
-              <PackagePlus className="size-4" />
-              <span>Install skill</span>
-            </Button>
-          </div>
+          <Button size="sm" className="w-fit" onClick={openInstallDialog}>
+            <PackagePlus className="size-4" />
+            <span>Install skill</span>
+          </Button>
         </div>
 
-        <label className="relative flex h-12 items-center rounded-lg border bg-background shadow-xs">
+        <label className="sticky top-16 z-40 flex h-12 items-center rounded-lg border bg-background shadow-xs">
           <Search className="pointer-events-none absolute left-4 size-4 text-muted-foreground" />
           <Input
             type="search"
@@ -540,13 +527,6 @@ export function BrowsePage() {
                         <Copy className="size-4" />
                       )}
                     </Button>
-                    <Link
-                      to="/installed"
-                      aria-label={`Manage ${skill.name}`}
-                      className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-                    >
-                      <Trash2 className="size-4" />
-                    </Link>
                     <Link
                       to="/skill/$skillId"
                       params={{ skillId: skill.id }}
