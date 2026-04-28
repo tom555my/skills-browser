@@ -33,7 +33,10 @@ export function SummaryCard(props: {
 export function StatusBanner(props: { icon: ReactNode; className: string; message: string }) {
   return (
     <div
-      className={cn('flex items-start gap-2 rounded-xl border px-3 py-2 text-sm', props.className)}
+      className={cn(
+        'flex items-start gap-2 rounded-xl border px-3 py-2 text-sm duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1',
+        props.className
+      )}
     >
       <span className="mt-0.5 shrink-0">{props.icon}</span>
       <p>{props.message}</p>
@@ -45,7 +48,7 @@ export function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
   const { command, names, scope, status } = props.outcome;
 
   return (
-    <Card className="border shadow-none">
+    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -81,7 +84,7 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
   const { command, source, scope, status } = props.outcome;
 
   return (
-    <Card className="border shadow-none">
+    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -115,7 +118,7 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
 
 export function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) {
   return (
-    <Card className="border shadow-none">
+    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <RefreshCw className="size-4" />

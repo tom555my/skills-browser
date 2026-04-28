@@ -491,7 +491,7 @@ export function BrowsePage() {
             <Card
               key={skill.id}
               size="sm"
-              className="min-h-44 min-w-0 rounded-lg border shadow-none transition-colors hover:bg-accent/40"
+              className="min-h-44 min-w-0 rounded-lg border shadow-none transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out)] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
             >
               <CardHeader>
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -682,7 +682,7 @@ export function BrowsePage() {
 
                         {selectedPreview ? (
                           <form
-                            className="mt-3 space-y-3 rounded-lg border bg-background p-3"
+                            className="mt-3 space-y-3 rounded-lg border bg-background p-3 duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1"
                             onSubmit={handleInstall}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -789,7 +789,7 @@ export function BrowsePage() {
           </div>
 
           {selectedPreview ? (
-            <section className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg lg:block">
+            <section className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-right-2 lg:block">
               <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
                 <div className="min-w-0">
                   <p className="truncate font-mono text-sm font-medium">{selectedPreview.source}</p>

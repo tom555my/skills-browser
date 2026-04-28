@@ -143,7 +143,7 @@ export function SkillDetailsPage() {
         </div>
 
         {activeTab === 'overview' ? (
-          <Card className="border shadow-none">
+          <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
             <CardHeader>
               <CardTitle className="text-base">Skill Metadata</CardTitle>
             </CardHeader>
@@ -161,7 +161,7 @@ export function SkillDetailsPage() {
         ) : null}
 
         {activeTab === 'activity' ? (
-          <Card className="border shadow-none">
+          <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
             <CardHeader>
               <CardTitle className="text-base">Recent Activity</CardTitle>
             </CardHeader>
