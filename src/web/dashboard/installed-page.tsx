@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { CheckCircle2, ExternalLink, FolderCode, Globe, RefreshCw, X } from 'lucide-react';
 
@@ -651,10 +651,13 @@ export function InstalledPage() {
             </p>
           ) : (
             <ul className="space-y-2">
-              {visibleSkills.map((skill) => (
+              {visibleSkills.map((skill, index) => (
                 <li
                   key={skill.id}
-                  className="rounded-lg border p-3 transition-[background-color,border-color] duration-150 ease-[var(--ease-out)] has-[[data-slot=checkbox][data-checked]]:bg-muted/40"
+                  className="skill-list-item rounded-lg border p-3 transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[var(--ease-out)] hover:-translate-y-0.5 hover:shadow-xs has-[[data-slot=checkbox][data-checked]]:bg-muted/40"
+                  style={
+                    { '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties
+                  }
                 >
                   <div className="flex flex-wrap items-start gap-3">
                     <label className="flex h-8 items-center">

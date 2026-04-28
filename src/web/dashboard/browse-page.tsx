@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -497,11 +498,12 @@ export function BrowsePage() {
         </Card>
       ) : (
         <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
-          {visibleSkills.map((skill) => (
+          {visibleSkills.map((skill, index) => (
             <Card
               key={skill.id}
               size="sm"
-              className="min-h-44 min-w-0 rounded-lg border shadow-none transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out)] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              className="skill-list-item min-h-44 min-w-0 rounded-lg border shadow-none transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out)] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              style={{ '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties}
             >
               <CardHeader>
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -661,7 +663,7 @@ export function BrowsePage() {
                     {searchStatus === 'success' ? (
                       <>
                         <CommandGroup heading="Skills">
-                          {searchResults.map((result) => {
+                          {searchResults.map((result, index) => {
                             const isViewing = selectedPreview?.id === result.id;
 
                             return (
@@ -670,9 +672,14 @@ export function BrowsePage() {
                                 value={`${result.source} ${result.owner} ${result.repository}`}
                                 data-checked={isViewing}
                                 className={cn(
-                                  'items-start gap-3 px-3 py-3',
+                                  'skill-list-item items-start gap-3 px-3 py-3',
                                   isViewing && 'bg-accent text-accent-foreground'
                                 )}
+                                style={
+                                  {
+                                    '--skill-list-item-delay': `${Math.min(index, 8) * 24}ms`,
+                                  } as CSSProperties
+                                }
                                 onSelect={() => handlePreviewSearchResult(result)}
                               >
                                 <Eye className="mt-0.5 text-muted-foreground" />
