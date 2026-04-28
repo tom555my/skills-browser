@@ -13,6 +13,12 @@ type ParsedOptions = {
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 1996;
 
+type StartEnvironment = {
+  [key: string]: string | undefined;
+  HOST?: string;
+  PORT?: string;
+};
+
 export async function main() {
   const { version } = await import('../package.json', {
     with: { type: 'json' },
@@ -69,14 +75,21 @@ function printHelp(version: string) {
       'Defaults:',
       `  --host ${DEFAULT_HOST}`,
       `  --port ${DEFAULT_PORT}`,
+      '',
+      'Environment:',
+      '  HOST sets the default host',
+      '  PORT sets the default port',
     ].join('\n'),
     'skills-browser'
   );
 }
 
-function parseStartOptions(args: string[]): ParsedOptions {
-  let host = DEFAULT_HOST;
-  let port = DEFAULT_PORT;
+export function parseStartOptions(
+  args: string[],
+  environment: StartEnvironment = process.env
+): ParsedOptions {
+  let host = getEnvironmentValue(environment.HOST) ?? DEFAULT_HOST;
+  let rawPort = getEnvironmentValue(environment.PORT) ?? String(DEFAULT_PORT);
   let autoOpen = false;
 
   for (let i = 0; i < args.length; i += 1) {
@@ -103,7 +116,7 @@ function parseStartOptions(args: string[]): ParsedOptions {
         throw new Error('Invalid port. Pass --port <number>.');
       }
 
-      port = parsePort(value);
+      rawPort = value;
       i += 1;
       continue;
     }
@@ -112,7 +125,13 @@ function parseStartOptions(args: string[]): ParsedOptions {
   }
 
   validateHost(host);
+  const port = parsePort(rawPort);
   return { autoOpen, host, port };
+}
+
+function getEnvironmentValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function parsePort(rawPort: string): number {
@@ -201,7 +220,9 @@ function buildServerUrl(host: string, port: number) {
   return `http://${formattedHost}:${port}`;
 }
 
-main().catch((error) => {
-  p.log.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    p.log.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
