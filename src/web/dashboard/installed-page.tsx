@@ -382,7 +382,7 @@ export function InstalledPage() {
       </div>
 
       {selectedSkills.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
           <span className="text-sm text-muted-foreground">{selectedSkills.size} selected</span>
           <Button
             variant="outline"
@@ -457,7 +457,7 @@ export function InstalledPage() {
       ) : null}
 
       {isRemoveConfirmOpen ? (
-        <Card className="border shadow-none">
+        <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
           <CardHeader>
             <CardTitle className="text-base">Confirm removal</CardTitle>
             <CardDescription>
@@ -638,7 +638,10 @@ export function InstalledPage() {
           ) : (
             <ul className="space-y-2">
               {visibleSkills.map((skill) => (
-                <li key={skill.id} className="rounded-lg border p-3">
+                <li
+                  key={skill.id}
+                  className="rounded-lg border p-3 transition-[background-color,border-color] duration-150 ease-[var(--ease-out)] has-[[data-slot=checkbox][data-checked]]:bg-muted/40"
+                >
                   <div className="flex flex-wrap items-start gap-3">
                     <label className="flex h-8 items-center">
                       <Checkbox
