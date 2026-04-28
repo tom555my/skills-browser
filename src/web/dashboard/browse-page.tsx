@@ -453,7 +453,10 @@ export function BrowsePage() {
           </Button>
         </div>
 
-        <label className="sticky top-16 z-40 flex h-12 items-center rounded-lg border bg-background shadow-xs">
+      </section>
+
+      <div className="sticky top-16 z-40 mx-auto w-full max-w-4xl">
+        <label className="relative flex h-12 items-center rounded-lg border bg-background shadow-xs">
           <Search className="pointer-events-none absolute left-4 size-4 text-muted-foreground" />
           <Input
             type="search"
@@ -466,7 +469,7 @@ export function BrowsePage() {
             return
           </span>
         </label>
-      </section>
+      </div>
 
       {errorMessage ? (
         <StatusBanner

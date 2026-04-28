@@ -80,38 +80,26 @@ function TopBar() {
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
-            <Link
-              to="/"
-              className={buttonVariants({
-                variant: isBrowseActive ? 'secondary' : 'ghost',
-                size: 'sm',
-              })}
-            >
-              Browse
-            </Link>
+            {showScopeFilter ? (
+              <div className="hidden items-center rounded-lg border bg-background p-0.5 md:flex">
+                {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
+                  <Button
+                    key={scope}
+                    size="sm"
+                    variant={scopeFilter === scope ? 'secondary' : 'ghost'}
+                    onClick={() => void setScopeFilter(scope)}
+                  >
+                    {scope === 'all' ? 'All' : scopeLabel(scope)}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </nav>
         </div>
 
         <div className="flex items-center gap-2">
-          {showScopeFilter ? (
-            <div className="hidden items-center rounded-md border bg-background p-0.5 md:flex">
-              {(['all', 'project', 'global'] as ScopeFilter[]).map((scope) => (
-                <Button
-                  key={scope}
-                  size="sm"
-                  variant={scopeFilter === scope ? 'secondary' : 'ghost'}
-                  className="h-8 px-3"
-                  onClick={() => void setScopeFilter(scope)}
-                >
-                  {scope === 'all' ? 'All' : scopeLabel(scope)}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-
           <Button
             variant="outline"
-            size="sm"
             onClick={openInstallDialog}
             aria-label="Install a skill"
           >
@@ -121,7 +109,6 @@ function TopBar() {
 
           <Button
             variant="outline"
-            size="sm"
             disabled={isRefreshing}
             onClick={handleRefresh}
             aria-label="Refresh installed skills"
@@ -140,7 +127,7 @@ function TopBar() {
 
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             className="md:hidden"
             onClick={() => setIsMobileMenuOpen((current) => !current)}
             aria-label="Toggle navigation menu"
