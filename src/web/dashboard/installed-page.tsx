@@ -18,9 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { cn } from '../lib/utils';
 import {
   CommandOutputCard,
+  LoadingGlyph,
   PageLoadingState,
   RemoveOperationCard,
   StatusBanner,
@@ -366,7 +366,11 @@ export function InstalledPage() {
             disabled={isUpdating || isRemoving || projectSkills.length === 0}
             onClick={handleUpdateProject}
           >
-            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            {isUpdating ? (
+              <LoadingGlyph label="Updating project skills" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
             <span>{isUpdating ? 'Updating' : 'Update project'}</span>
           </Button>
           <Button
@@ -375,7 +379,11 @@ export function InstalledPage() {
             disabled={isUpdating || isRemoving || globalSkills.length === 0}
             onClick={handleUpdateGlobal}
           >
-            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            {isUpdating ? (
+              <LoadingGlyph label="Updating global skills" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
             <span>{isUpdating ? 'Updating' : 'Update global'}</span>
           </Button>
         </div>
@@ -398,7 +406,11 @@ export function InstalledPage() {
             onClick={handleUpdateSelected}
             disabled={isUpdating || isRemoving || selectedUpdateOperations.length === 0}
           >
-            <RefreshCw className={cn('size-4', isUpdating ? 'animate-spin' : undefined)} />
+            {isUpdating ? (
+              <LoadingGlyph label="Updating selected skills" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
             <span>{isUpdating ? 'Updating...' : 'Update selected'}</span>
           </Button>
           <Button
@@ -407,6 +419,7 @@ export function InstalledPage() {
             onClick={openRemoveConfirmation}
             disabled={isRemoving || isUpdating}
           >
+            {isRemoving ? <LoadingGlyph label="Removing selected skills" /> : null}
             {isRemoving ? 'Removing...' : 'Remove'}
           </Button>
         </div>
@@ -553,6 +566,7 @@ export function InstalledPage() {
                   !removeConfirmed || selectedNamesForScope.length === 0 || isRemoving || isUpdating
                 }
               >
+                {isRemoving ? <LoadingGlyph label="Removing selected skills" /> : null}
                 {isRemoving ? 'Removing...' : 'Confirm remove'}
               </Button>
             </div>

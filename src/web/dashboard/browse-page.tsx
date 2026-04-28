@@ -69,7 +69,13 @@ import {
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import { INSTALL_DIALOG_EVENT } from './constants';
-import { InstallOperationCard, PageLoadingState, StatusBanner } from './components';
+import {
+  InstallOperationCard,
+  LoadingGlyph,
+  LoadingIndicator,
+  PageLoadingState,
+  StatusBanner,
+} from './components';
 import { useDashboardData } from './data';
 import type { BrowserSkill, InstallOutcome, ScopeFilter, SearchStatus } from './types';
 import {
@@ -398,7 +404,11 @@ export function BrowsePage() {
                     disabled={searchStatus === 'pending'}
                     onSelect={() => void handleSearch()}
                   >
-                    <Search className={cn(searchStatus === 'pending' && 'animate-pulse')} />
+                    {searchStatus === 'pending' ? (
+                      <LoadingGlyph label="Searching skills.sh" />
+                    ) : (
+                      <Search />
+                    )}
                     <span>{searchStatus === 'pending' ? 'Searching' : 'Search'} skills.sh</span>
                     <CommandShortcut>return</CommandShortcut>
                   </CommandItem>
@@ -620,9 +630,10 @@ export function BrowsePage() {
                   <>
                     {searchStatus === 'pending' ? (
                       <CommandGroup>
-                        <p className="px-1 text-sm text-muted-foreground">
-                          Searching for "{lastSearchQuery}"...
-                        </p>
+                        <LoadingIndicator
+                          label={`Searching for "${lastSearchQuery}"`}
+                          className="px-1"
+                        />
                         {[0, 1, 2].map((item) => (
                           <Skeleton key={item} className="h-16 rounded-lg border" />
                         ))}
@@ -695,7 +706,11 @@ export function BrowsePage() {
                                 </p>
                               </div>
                               <Button size="sm" disabled={isInstalling} type="submit">
-                                <PackagePlus className="size-4" />
+                                {isInstalling ? (
+                                  <LoadingGlyph label="Adding skill" />
+                                ) : (
+                                  <PackagePlus className="size-4" />
+                                )}
                                 <span>{isInstalling ? 'Adding' : 'Add'}</span>
                               </Button>
                             </div>
@@ -845,6 +860,7 @@ function SkillSearchPreview({
     return (
       <div className="h-[calc(100%-3rem)] overflow-y-auto bg-background p-6">
         <div className="space-y-6">
+          <LoadingIndicator label="Loading skill details" />
           <div className="space-y-3">
             <Skeleton className="h-8 w-56" />
             <Skeleton className="h-4 w-full" />
