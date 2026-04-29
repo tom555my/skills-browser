@@ -11,6 +11,12 @@ import { Skeleton } from '../components/ui/skeleton';
 import { AgentBadge } from './agent-badge';
 import { PageLoadingState } from './components';
 import { useDashboardData } from './data';
+import {
+  SkillMarkdown,
+  type SkillFrontmatterValue,
+  parseSkillFrontmatterAttributes,
+  parseSkillMarkdownDocument,
+} from './skill-markdown';
 import { formatDateTime, getErrorMessage, scopeLabel } from './utils';
 
 export function SkillDetailsPage() {
@@ -139,14 +145,179 @@ function SkillReadmeBody({
     );
   }
 
+  const document = parseSkillMarkdownDocument(markdown);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {document.frontmatter !== null ? (
+        <SkillFrontmatter frontmatter={document.frontmatter} />
+      ) : null}
+
+      <section className="flex flex-col gap-3">
+        <div className="pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+          Instructions
+        </div>
+        <SkillMarkdown markdown={document.markdown} />
+      </section>
+    </div>
+  );
+}
+
+function SkillFrontmatter({ frontmatter }: { frontmatter: string }) {
+  const attributes = parseSkillFrontmatterAttributes(frontmatter);
+
   return (
     <section className="flex flex-col gap-3">
-      <div className="border-b pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
-        SKILL.md
+      <div className="pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+        YAML frontmatter
       </div>
-      <pre className="min-w-0 overflow-x-auto whitespace-pre-wrap rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 text-foreground">
-        {markdown}
-      </pre>
+      <div className="overflow-hidden rounded-lg border bg-muted/20">
+        {attributes.map((attribute) => (
+          <div
+            key={attribute.name}
+            className="grid gap-2 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[10rem_1fr]"
+          >
+            <div className="min-w-0 font-mono text-xs font-medium text-muted-foreground">
+              {attribute.name}
+            </div>
+            <div className="min-w-0 text-sm leading-6 text-foreground">
+              <SkillFrontmatterValueView value={attribute.value} />
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
+}
+
+function SkillFrontmatterValueView({ value }: { value: SkillFrontmatterValue }) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-muted-foreground">Empty array</span>;
+    }
+
+    if (value.every(isFrontmatterRecord)) {
+      return <SkillFrontmatterObjectArrayTable values={value} />;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {value.map((item, index) => (
+          <span
+            key={index}
+            className="rounded-md border bg-background px-2 py-0.5 font-mono text-xs text-foreground"
+          >
+            {frontmatterValueToText(item)}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  if (isFrontmatterRecord(value)) {
+    return <SkillFrontmatterKeyValueTable value={value} />;
+  }
+
+  return <span className="whitespace-pre-wrap break-words">{frontmatterValueToText(value)}</span>;
+}
+
+function SkillFrontmatterKeyValueTable({
+  value,
+}: {
+  value: Record<string, SkillFrontmatterValue>;
+}) {
+  const entries = Object.entries(value);
+
+  if (entries.length === 0) {
+    return <span className="text-muted-foreground">Empty object</span>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <table className="w-full border-collapse text-left text-sm">
+        <tbody>
+          {entries.map(([key, item]) => (
+            <tr key={key} className="border-b last:border-b-0">
+              <th className="w-40 bg-muted/40 px-3 py-2 align-top font-mono text-xs font-medium text-muted-foreground">
+                {key}
+              </th>
+              <td className="px-3 py-2 align-top">
+                <SkillFrontmatterValueView value={item} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SkillFrontmatterObjectArrayTable({
+  values,
+}: {
+  values: Record<string, SkillFrontmatterValue>[];
+}) {
+  const columns = Array.from(new Set(values.flatMap((item) => Object.keys(item))));
+
+  if (columns.length === 0) {
+    return <span className="text-muted-foreground">Empty objects</span>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full min-w-max border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b bg-muted/40">
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="px-3 py-2 align-top font-mono text-xs font-medium text-muted-foreground"
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {values.map((item, index) => (
+            <tr key={index} className="border-b last:border-b-0">
+              {columns.map((column) => (
+                <td key={column} className="px-3 py-2 align-top">
+                  {column in item ? (
+                    <SkillFrontmatterValueView value={item[column]} />
+                  ) : (
+                    <span className="text-muted-foreground">Empty</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function isFrontmatterRecord(
+  value: SkillFrontmatterValue
+): value is Record<string, SkillFrontmatterValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function frontmatterValueToText(value: SkillFrontmatterValue): string {
+  if (value === null || value === '') {
+    return 'Empty';
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(frontmatterValueToText).join(', ');
+  }
+
+  if (isFrontmatterRecord(value)) {
+    return Object.entries(value)
+      .map(([key, item]) => `${key}: ${frontmatterValueToText(item)}`)
+      .join(', ');
+  }
+
+  return String(value);
 }
