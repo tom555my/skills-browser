@@ -5,9 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DashboardPayload } from '../../features/skills/state';
 import { fetchDashboardState, refreshDashboardState } from '../api';
 import { buildSkills, getErrorMessage } from './utils';
-import type { BrowserSkill, DashboardDataValue } from './types';
+import type { BrowserSkill, DashboardActionsValue, DashboardDataValue } from './types';
 
 const DashboardDataContext = createContext<DashboardDataValue | null>(null);
+const DashboardActionsContext = createContext<DashboardActionsValue | null>(null);
 const dashboardQueryKey = ['dashboard', 'state'] as const;
 
 export function DashboardDataProvider({ children }: { children: ReactNode }) {
@@ -74,23 +75,41 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     return buildSkills(payload.installedState);
   }, [payload]);
 
-  const getSkillById = (skillId: string): BrowserSkill | undefined => {
-    return skills.find((skill) => skill.id === skillId);
-  };
+  const skillsById = useMemo(() => {
+    return new Map(skills.map((skill) => [skill.id, skill]));
+  }, [skills]);
 
-  const contextValue: DashboardDataValue = {
-    payload,
-    skills,
-    isInitialLoading,
-    isRefreshing: isRefreshPending || isRefetching,
-    errorMessage,
-    reload: load,
-    refresh,
-    getSkillById,
-  };
+  const getSkillById = useCallback(
+    (skillId: string): BrowserSkill | undefined => {
+      return skillsById.get(skillId);
+    },
+    [skillsById]
+  );
+
+  const dataValue: DashboardDataValue = useMemo(
+    () => ({
+      payload,
+      skills,
+      isInitialLoading,
+      errorMessage,
+      getSkillById,
+    }),
+    [errorMessage, getSkillById, isInitialLoading, payload, skills]
+  );
+
+  const actionsValue: DashboardActionsValue = useMemo(
+    () => ({
+      isRefreshing: isRefreshPending || isRefetching,
+      reload: load,
+      refresh,
+    }),
+    [isRefreshPending, isRefetching, load, refresh]
+  );
 
   return (
-    <DashboardDataContext.Provider value={contextValue}>{children}</DashboardDataContext.Provider>
+    <DashboardActionsContext.Provider value={actionsValue}>
+      <DashboardDataContext.Provider value={dataValue}>{children}</DashboardDataContext.Provider>
+    </DashboardActionsContext.Provider>
   );
 }
 
@@ -99,6 +118,16 @@ export function useDashboardData(): DashboardDataValue {
 
   if (!context) {
     throw new Error('useDashboardData must be used within DashboardDataProvider.');
+  }
+
+  return context;
+}
+
+export function useDashboardActions(): DashboardActionsValue {
+  const context = useContext(DashboardActionsContext);
+
+  if (!context) {
+    throw new Error('useDashboardActions must be used within DashboardDataProvider.');
   }
 
   return context;

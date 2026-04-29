@@ -12,7 +12,9 @@ export type BrowserSkill = InstalledSkill & {
   description: string;
   primarySource: string;
   activityAt: string | null;
+  activityTimestamp: number;
   installCommand: string;
+  searchableText: string;
 };
 
 export type RemoveOutcome = {
@@ -38,11 +40,14 @@ export type DashboardDataValue = {
   payload: DashboardPayload | null;
   skills: BrowserSkill[];
   isInitialLoading: boolean;
-  isRefreshing: boolean;
   errorMessage: string | null;
+  getSkillById: (skillId: string) => BrowserSkill | undefined;
+};
+
+export type DashboardActionsValue = {
+  isRefreshing: boolean;
   reload: () => Promise<void>;
   refresh: () => Promise<void>;
-  getSkillById: (skillId: string) => BrowserSkill | undefined;
 };
 
 export type StatusTone = 'success' | 'error';

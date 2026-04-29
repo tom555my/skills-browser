@@ -3,6 +3,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -78,7 +79,7 @@ import {
   PageLoadingState,
   StatusBanner,
 } from './components';
-import { useDashboardData } from './data';
+import { useDashboardActions, useDashboardData } from './data';
 import type { BrowserSkill, InstallOutcome, ScopeFilter, SearchStatus } from './types';
 import {
   createCommandFailureMessage,
@@ -88,7 +89,8 @@ import {
 } from './utils';
 
 export function BrowsePage() {
-  const { payload, skills, isInitialLoading, errorMessage, reload, refresh } = useDashboardData();
+  const { payload, skills, isInitialLoading, errorMessage } = useDashboardData();
+  const { reload, refresh } = useDashboardActions();
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
@@ -118,46 +120,20 @@ export function BrowsePage() {
   );
   const [searchQuery, setSearchQuery] = useQueryState('q', parseAsString.withDefault(''));
   const [previewId, setPreviewId] = useQueryState('preview');
+  const deferredSearch = useDeferredValue(search);
+  const copyResetTimeoutRef = useRef<number | null>(null);
 
   const visibleSkills = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    let next = [...skills];
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
 
-    if (scopeFilter !== 'all') {
-      next = next.filter((skill) => skill.scope === scopeFilter);
-    }
-
-    if (normalizedSearch.length > 0) {
-      next = next.filter((skill) => {
-        const haystack = [
-          skill.name,
-          skill.description,
-          skill.primarySource,
-          skill.scope,
-          skill.sourceType ?? '',
-          skill.ref ?? '',
-          ...skill.agents,
-        ]
-          .join(' ')
-          .toLowerCase();
-
-        return haystack.includes(normalizedSearch);
-      });
-    }
-
-    next.sort((left, right) => {
-      const leftValue = left.activityAt ? Date.parse(left.activityAt) : 0;
-      const rightValue = right.activityAt ? Date.parse(right.activityAt) : 0;
-
-      if (leftValue !== rightValue) {
-        return rightValue - leftValue;
+    return skills.filter((skill) => {
+      if (scopeFilter !== 'all' && skill.scope !== scopeFilter) {
+        return false;
       }
 
-      return left.name.localeCompare(right.name);
+      return normalizedSearch.length === 0 || skill.searchableText.includes(normalizedSearch);
     });
-
-    return next;
-  }, [scopeFilter, search, skills]);
+  }, [deferredSearch, scopeFilter, skills]);
 
   const totalInstalled = payload
     ? payload.installedState.project.skills.length + payload.installedState.global.skills.length
@@ -178,7 +154,13 @@ export function BrowsePage() {
     isPending: isSelectedPreviewDetailsPending,
   } = useQuery({
     queryKey: ['skill-details', selectedPreviewUrl],
-    queryFn: async () => fetchSkillDetails(selectedPreviewUrl ?? ''),
+    queryFn: async () => {
+      if (!selectedPreviewUrl) {
+        throw new Error('Skill details URL is required.');
+      }
+
+      return fetchSkillDetails(selectedPreviewUrl);
+    },
     enabled: isInstallDialogOpen && Boolean(selectedPreviewUrl),
   });
 
@@ -230,15 +212,31 @@ export function BrowsePage() {
       return;
     }
 
-    window.setTimeout(() => installSearchInputRef.current?.focus(), 40);
+    const focusTimeout = window.setTimeout(() => installSearchInputRef.current?.focus(), 40);
+
+    return () => {
+      window.clearTimeout(focusTimeout);
+    };
   }, [isInstallDialogOpen, selectedPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopyCommand = async (skill: BrowserSkill) => {
     try {
       await navigator.clipboard.writeText(skill.installCommand);
       setCopiedSkillId(skill.id);
-      window.setTimeout(() => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+      copyResetTimeoutRef.current = window.setTimeout(() => {
         setCopiedSkillId((current) => (current === skill.id ? null : current));
+        copyResetTimeoutRef.current = null;
       }, 1200);
     } catch {
       setCopiedSkillId(null);
@@ -459,7 +457,6 @@ export function BrowsePage() {
             <span>Install skill</span>
           </Button>
         </div>
-
       </section>
 
       <div className="sticky top-16 z-40 mx-auto w-full max-w-4xl">
@@ -499,7 +496,7 @@ export function BrowsePage() {
             <Card
               key={skill.id}
               size="sm"
-              className="skill-list-item min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              className="skill-list-item min-h-44 min-w-0 rounded-lg [contain-intrinsic-size:12rem] [content-visibility:auto] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
               style={{ '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties}
             >
               <CardHeader>

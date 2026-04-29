@@ -7,7 +7,7 @@ import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-reac
 import { Button, buttonVariants } from '../components/ui/button';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
 import { AnimatedText, LoadingGlyph } from './components';
-import { DashboardDataProvider, useDashboardData } from './data';
+import { DashboardDataProvider, useDashboardActions } from './data';
 import type { ScopeFilter, Theme } from './types';
 import { getThemeFromDom, scopeLabel } from './utils';
 
@@ -33,7 +33,7 @@ function TopBar() {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
-  const { isRefreshing, refresh } = useDashboardData();
+  const { isRefreshing, refresh } = useDashboardActions();
   const [scopeFilter, setScopeFilter] = useQueryState(
     'scope',
     parseAsStringEnum<ScopeFilter>(['all', 'project', 'global']).withDefault('all')
@@ -98,11 +98,7 @@ function TopBar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={openInstallDialog}
-            aria-label="Install a skill"
-          >
+          <Button variant="outline" onClick={openInstallDialog} aria-label="Install a skill">
             <PackagePlus className="size-4" />
             <span className="hidden sm:inline">Install</span>
           </Button>
