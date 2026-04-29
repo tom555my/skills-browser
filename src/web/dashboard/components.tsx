@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { RefreshCw, TerminalSquare } from 'lucide-react';
+import { TextMorph } from 'torph/react';
 
 import type { InstalledSkillsScopeState, UpdateSkillsResponse } from '../../features/skills/state';
 import type { SkillScope } from '../../features/skills/types';
@@ -226,6 +227,19 @@ export function OutputBlock(props: { label: string; value: string }) {
   );
 }
 
+export function AnimatedText(props: { children: string; className?: string; as?: 'span' | 'p' }) {
+  return (
+    <TextMorph
+      as={props.as ?? 'span'}
+      className={cn('inline-block', props.className)}
+      duration={280}
+      ease="cubic-bezier(0.16, 1, 0.3, 1)"
+    >
+      {props.children}
+    </TextMorph>
+  );
+}
+
 export function LoadingGlyph(props: {
   label?: string;
   className?: string;
@@ -252,7 +266,7 @@ export function LoadingIndicator(props: { label: string; className?: string }) {
       )}
     >
       <LoadingGlyph label={props.label} />
-      <span>{props.label}</span>
+      <AnimatedText>{props.label}</AnimatedText>
     </div>
   );
 }

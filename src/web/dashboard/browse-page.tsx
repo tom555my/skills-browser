@@ -68,8 +68,10 @@ import {
 } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
+import { AgentBadge } from './agent-badge';
 import { INSTALL_DIALOG_EVENT } from './constants';
 import {
+  AnimatedText,
   InstallOperationCard,
   LoadingGlyph,
   LoadingIndicator,
@@ -409,7 +411,12 @@ export function BrowsePage() {
                     ) : (
                       <Search />
                     )}
-                    <span>{searchStatus === 'pending' ? 'Searching' : 'Search'} skills.sh</span>
+                    <span className="inline-flex items-center gap-1">
+                      <AnimatedText className="min-w-14">
+                        {searchStatus === 'pending' ? 'Searching' : 'Search'}
+                      </AnimatedText>
+                      <span>skills.sh</span>
+                    </span>
                     <CommandShortcut>return</CommandShortcut>
                   </CommandItem>
                 </CommandGroup>
@@ -492,7 +499,7 @@ export function BrowsePage() {
             <Card
               key={skill.id}
               size="sm"
-              className="skill-list-item min-h-44 min-w-0 rounded-lg border shadow-none transition-[background-color,box-shadow,transform] duration-150 ease-[var(--ease-out)] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              className="skill-list-item min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
               style={{ '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties}
             >
               <CardHeader>
@@ -549,9 +556,7 @@ export function BrowsePage() {
                   {skill.agents.length > 0 ? (
                     <div className="flex min-h-8 flex-wrap gap-1.5 rounded-md border border-dashed p-1.5">
                       {skill.agents.map((agent) => (
-                        <Badge key={`${skill.id}:${agent}`} variant="outline">
-                          {agent}
-                        </Badge>
+                        <AgentBadge key={`${skill.id}:${agent}`} agent={agent} />
                       ))}
                     </div>
                   ) : (
@@ -701,7 +706,9 @@ export function BrowsePage() {
                                 ) : (
                                   <PackagePlus className="size-4" />
                                 )}
-                                <span>{isInstalling ? 'Adding' : 'Add'}</span>
+                                <AnimatedText className="min-w-10 text-left">
+                                  {isInstalling ? 'Adding' : 'Add'}
+                                </AnimatedText>
                               </Button>
                             </div>
 

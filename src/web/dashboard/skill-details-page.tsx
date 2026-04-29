@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
+import { AgentBadge } from './agent-badge';
 import { CommandOutputCard, MetadataRow, PageLoadingState } from './components';
 import { useDashboardData } from './data';
 import type { SkillDetailsTab } from './types';
@@ -107,9 +108,7 @@ export function SkillDetailsPage() {
         {skill.agents.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {skill.agents.map((agent) => (
-              <Badge key={`${skill.id}:${agent}`} variant="outline">
-                {agent}
-              </Badge>
+              <AgentBadge key={`${skill.id}:${agent}`} agent={agent} />
             ))}
           </div>
         ) : null}

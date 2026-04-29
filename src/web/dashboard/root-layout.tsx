@@ -6,7 +6,7 @@ import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-reac
 
 import { Button, buttonVariants } from '../components/ui/button';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
-import { LoadingGlyph } from './components';
+import { AnimatedText, LoadingGlyph } from './components';
 import { DashboardDataProvider, useDashboardData } from './data';
 import type { ScopeFilter, Theme } from './types';
 import { getThemeFromDom, scopeLabel } from './utils';
@@ -114,11 +114,13 @@ function TopBar() {
             aria-label="Refresh installed skills"
           >
             {isRefreshing ? (
-              <LoadingGlyph label="Refreshing installed skills" />
+              <LoadingGlyph label="Refreshing installed skills" size={14} />
             ) : (
               <RefreshCw className="size-4" />
             )}
-            <span>{isRefreshing ? 'Refreshing' : 'Refresh'}</span>
+            <AnimatedText className="text-left">
+              {isRefreshing ? 'Refreshing' : 'Refresh'}
+            </AnimatedText>
           </Button>
 
           <Button variant="ghost" size="icon-sm" onClick={toggleTheme} aria-label="Toggle theme">
