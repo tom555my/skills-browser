@@ -45,9 +45,9 @@ export async function main() {
     hostname: options.host,
     port: options.port,
     routes: {
-      '/': index,
+      '/api/*': honoApp.fetch,
+      '/*': index,
     },
-    fetch: honoApp.fetch,
     development: process.env.NODE_ENV === 'development',
   });
 
