@@ -205,3 +205,56 @@ describe('dashboard install route', () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe('skill readme route', () => {
+  it('returns installed skill markdown by skill id', async () => {
+    const app = createHonoApp({
+      loadSkillReadme: async (skillId) => ({
+        skillId,
+        markdown: '# Find Skills\n',
+        loadedAt: '2026-01-02T00:00:00.000Z',
+      }),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/skill-readme', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ skillId: 'project:find-skills:/tmp/find-skills' }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      readme: {
+        skillId: 'project:find-skills:/tmp/find-skills',
+        markdown: '# Find Skills\n',
+        loadedAt: '2026-01-02T00:00:00.000Z',
+      },
+    });
+  });
+
+  it('rejects empty skill readme ids', async () => {
+    const app = createHonoApp({
+      loadSkillReadme: async (skillId) => ({
+        skillId,
+        markdown: '# Find Skills\n',
+        loadedAt: '2026-01-02T00:00:00.000Z',
+      }),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/skill-readme', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ skillId: ' ' }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+  });
+});

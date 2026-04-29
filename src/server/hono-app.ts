@@ -20,6 +20,7 @@ import {
 import type { SkillScope } from '../features/skills/types';
 import { loadInstalledSkillsState } from './installed-skills-state';
 import { loadSearchSkillsState } from './search-skills-state';
+import { loadSkillReadmeState } from './skill-readme-state';
 import {
   createSkillsCommandAdapter,
   type SkillsCommandAdapter,
@@ -35,6 +36,7 @@ type CreateHonoAppOptions = {
   loadInstalledState?: typeof loadInstalledSkillsState;
   loadSearchState?: typeof loadSearchSkillsState;
   loadSkillDetails?: typeof loadSkillDetailsState;
+  loadSkillReadme?: typeof loadSkillReadmeState;
 };
 
 const getLaunchDirectory = () => {
@@ -165,6 +167,10 @@ const getSkillDetailsUrl = (value: unknown): string | undefined => {
   return parseTrimmedString(parseRecord(value)?.url);
 };
 
+const getSkillReadmeId = (value: unknown): string | undefined => {
+  return parseTrimmedString(parseRecord(value)?.skillId);
+};
+
 const createDashboardPayload = async (options: {
   loadInstalledState: typeof loadInstalledSkillsState;
   previousState?: InstalledSkillsState;
@@ -190,6 +196,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
   const loadInstalledState = options.loadInstalledState ?? loadInstalledSkillsState;
   const loadSearchState = options.loadSearchState ?? loadSearchSkillsState;
   const loadDetailsState = options.loadSkillDetails ?? loadSkillDetailsState;
+  const loadReadmeState = options.loadSkillReadme ?? loadSkillReadmeState;
   const app = new Hono<EvlogVariables>();
 
   app.use(
@@ -200,6 +207,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
         '/api/dashboard/**': { service: 'skills-browser-dashboard' },
         '/api/search': { service: 'skills-browser-search' },
         '/api/skill-details': { service: 'skills-browser-skill-details' },
+        '/api/skill-readme': { service: 'skills-browser-skill-readme' },
       },
     })
   );
@@ -393,6 +401,34 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     try {
       return context.json({
         details: await loadDetailsState(url),
+      });
+    } catch (error) {
+      return context.json(
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        400
+      );
+    }
+  });
+
+  app.post('/api/skill-readme', async (context) => {
+    const body = await context.req.json().catch(() => undefined);
+    const skillId = getSkillReadmeId(body);
+
+    if (!skillId) {
+      return context.json({ error: 'Skill id is required.' }, 400);
+    }
+
+    context.get('log').set({
+      skillReadme: {
+        skillIdLength: skillId.length,
+      },
+    });
+
+    try {
+      return context.json({
+        readme: await loadReadmeState(skillId),
       });
     } catch (error) {
       return context.json(

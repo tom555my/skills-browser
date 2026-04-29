@@ -6,7 +6,6 @@ import type { InstalledSkill, SkillScope } from '../../features/skills/types';
 export type Theme = 'light' | 'dark';
 export type ScopeFilter = 'all' | SkillScope;
 export type InstalledTab = 'all' | SkillScope;
-export type SkillDetailsTab = 'overview' | 'activity' | 'output';
 export type SearchStatus = 'idle' | 'pending' | 'success' | 'empty' | 'error';
 
 export type BrowserSkill = InstalledSkill & {

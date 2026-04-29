@@ -1,29 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Check, Copy } from 'lucide-react';
+import { ArrowLeft, BookOpenText } from 'lucide-react';
 
+import { fetchSkillReadme } from '../api';
 import { Badge } from '../components/ui/badge';
-import { Button, buttonVariants } from '../components/ui/button';
+import { buttonVariants } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
+import { Skeleton } from '../components/ui/skeleton';
 import { AgentBadge } from './agent-badge';
-import { CommandOutputCard, MetadataRow, PageLoadingState } from './components';
+import { PageLoadingState } from './components';
 import { useDashboardData } from './data';
-import type { SkillDetailsTab } from './types';
-import { buildSkillActivity, formatDateTime, formatNullableDate, scopeLabel } from './utils';
+import { formatDateTime, getErrorMessage, scopeLabel } from './utils';
 
 export function SkillDetailsPage() {
   const { skillId } = useParams({ from: '/skill/$skillId' });
-  const { payload, isInitialLoading, skills, getSkillById } = useDashboardData();
-  const [activeTab, setActiveTab] = useState<SkillDetailsTab>('overview');
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    setActiveTab('overview');
-    setCopied(false);
-  }, [skillId]);
-
+  const { isInitialLoading, payload, skills, getSkillById } = useDashboardData();
   const skill = getSkillById(skillId);
+  const {
+    data: skillReadmePayload,
+    error: skillReadmeError,
+    isPending: isSkillReadmePending,
+  } = useQuery({
+    queryKey: ['installed-skill-readme', skill?.id],
+    queryFn: async () => fetchSkillReadme(skill?.id ?? ''),
+    enabled: Boolean(skill),
+  });
 
   if (isInitialLoading && skills.length === 0) {
     return <PageLoadingState />;
@@ -47,22 +49,8 @@ export function SkillDetailsPage() {
     );
   }
 
-  const scopeState = payload.installedState[skill.scope];
-
-  const handleCopyCommand = async () => {
-    try {
-      await navigator.clipboard.writeText(skill.installCommand);
-      setCopied(true);
-      window.setTimeout(() => {
-        setCopied(false);
-      }, 1400);
-    } catch {
-      setCopied(false);
-    }
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <Link
         to="/"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -71,38 +59,24 @@ export function SkillDetailsPage() {
         Back to Browse
       </Link>
 
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-mono text-2xl font-semibold">{skill.name}</h1>
-              <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
-              {skill.sourceType ? <Badge variant="outline">{skill.sourceType}</Badge> : null}
-              {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
-            </div>
-            <p className="text-muted-foreground">{skill.description}</p>
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{skill.primarySource}</span>
-              <span className="text-border">•</span>
-              <span>
-                {skill.activityAt
-                  ? `Updated ${formatDateTime(skill.activityAt)}`
-                  : 'No update timestamp available'}
-              </span>
-            </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-mono text-2xl font-semibold">{skill.name}</h1>
+            <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
+            {skill.sourceType ? <Badge variant="outline">{skill.sourceType}</Badge> : null}
+            {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
           </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => void handleCopyCommand()}>
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              <span>{copied ? 'Copied' : 'Copy install'}</span>
-            </Button>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{skill.description}</p>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{skill.primarySource}</span>
+            <span className="text-border">•</span>
+            <span>
+              {skill.activityAt
+                ? `Updated ${formatDateTime(skill.activityAt)}`
+                : 'No update timestamp available'}
+            </span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 font-mono text-sm">
-          <span className="text-muted-foreground">$</span>
-          <code className="min-w-0 flex-1 break-all">{skill.installCommand}</code>
         </div>
 
         {skill.agents.length > 0 ? (
@@ -116,74 +90,57 @@ export function SkillDetailsPage() {
 
       <Separator />
 
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant={activeTab === 'overview' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('overview')}
-          >
-            Overview
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === 'activity' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('activity')}
-          >
-            Activity
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === 'output' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('output')}
-          >
-            Command Output
-          </Button>
-        </div>
-
-        {activeTab === 'overview' ? (
-          <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
-            <CardHeader>
-              <CardTitle className="text-base">Skill Metadata</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                <MetadataRow label="Name" value={skill.name} mono />
-                <MetadataRow label="Scope" value={scopeLabel(skill.scope)} />
-                <MetadataRow label="Source" value={skill.primarySource} mono />
-                <MetadataRow label="Source Type" value={skill.sourceType ?? 'Unknown'} />
-                <MetadataRow label="Installed At" value={formatNullableDate(skill.installedAt)} />
-                <MetadataRow label="Updated At" value={formatNullableDate(skill.updatedAt)} />
-              </dl>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {activeTab === 'activity' ? (
-          <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
-            <CardHeader>
-              <CardTitle className="text-base">Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {buildSkillActivity(skill, payload.loadedAt).map((item) => (
-                  <div
-                    key={`${skill.id}:${item.label}:${item.timestamp}`}
-                    className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
-                  >
-                    <span>{item.label}</span>
-                    <span className="text-muted-foreground">{item.timestamp}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {activeTab === 'output' ? (
-          <CommandOutputCard scope={skill.scope} scopeState={scopeState} />
-        ) : null}
-      </div>
+      <SkillReadmeBody
+        errorMessage={skillReadmeError ? getErrorMessage(skillReadmeError) : null}
+        isLoading={isSkillReadmePending}
+        markdown={skillReadmePayload?.readme.markdown ?? null}
+      />
     </div>
+  );
+}
+
+function SkillReadmeBody({
+  errorMessage,
+  isLoading,
+  markdown,
+}: {
+  errorMessage: string | null;
+  isLoading: boolean;
+  markdown: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (markdown === null) {
+    return (
+      <Card className="border shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpenText className="size-4" />
+            SKILL.md unavailable
+          </CardTitle>
+          <CardDescription>
+            {errorMessage ?? 'The installed skill does not expose a readable SKILL.md file.'}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="border-b pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+        SKILL.md
+      </div>
+      <pre className="min-w-0 overflow-x-auto whitespace-pre-wrap rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 text-foreground">
+        {markdown}
+      </pre>
+    </section>
   );
 }
