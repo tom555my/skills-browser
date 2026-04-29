@@ -14,13 +14,14 @@ import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import {
   BookOpenText,
   Check,
-  CheckCircle2,
   Copy,
   Eye,
   ExternalLink,
   Package,
   PackagePlus,
+  RefreshCw,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -73,14 +74,16 @@ import { AgentBadge } from './agent-badge';
 import { INSTALL_DIALOG_EVENT } from './constants';
 import {
   AnimatedText,
-  InstallOperationCard,
   LoadingGlyph,
   LoadingIndicator,
   PageLoadingState,
   StatusBanner,
 } from './components';
 import { useDashboardActions, useDashboardData } from './data';
-import type { BrowserSkill, InstallOutcome, ScopeFilter, SearchStatus } from './types';
+import { useSkillActions } from './skill-actions';
+import { showErrorToast, showSuccessToast } from './toasts';
+import { confirm } from './confirm';
+import type { BrowserSkill, ScopeFilter, SearchStatus } from './types';
 import {
   createCommandFailureMessage,
   getErrorMessage,
@@ -91,7 +94,10 @@ import {
 export function BrowsePage() {
   const { payload, skills, isInitialLoading, errorMessage } = useDashboardData();
   const { reload, refresh } = useDashboardActions();
+  const { removeSkill, updateSkill } = useSkillActions();
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
+  const [removingSkillId, setRemovingSkillId] = useState<string | null>(null);
+  const [updatingSkillId, setUpdatingSkillId] = useState<string | null>(null);
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
   const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
@@ -103,11 +109,6 @@ export function BrowsePage() {
   const [installSkillsInput, setInstallSkillsInput] = useState('');
   const [installCopy, setInstallCopy] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [installStatus, setInstallStatus] = useState<{
-    tone: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const [installOutcome, setInstallOutcome] = useState<InstallOutcome | null>(null);
   const installSearchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useQueryState('search', parseAsString.withDefault(''));
   const [scopeFilter] = useQueryState(
@@ -243,6 +244,63 @@ export function BrowsePage() {
     }
   };
 
+    const handleRemoveSkill = async (skill: BrowserSkill) => {
+     if (removingSkillId || updatingSkillId) {
+       return;
+     }
+ 
+     const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
+     if (!confirmed) {
+       return;
+     }
+
+    setRemovingSkillId(skill.id);
+
+    try {
+      const outcome = await removeSkill(skill);
+
+      if (outcome.command.ok) {
+        showSuccessToast(
+          'Skill removed',
+          `${skill.name} was removed from ${scopeLabel(skill.scope)}.`
+        );
+        return;
+      }
+
+      showErrorToast('Remove failed', createCommandFailureMessage(outcome.command));
+    } catch (error) {
+      showErrorToast('Remove request failed', getErrorMessage(error));
+    } finally {
+      setRemovingSkillId(null);
+    }
+  };
+
+  const handleUpdateSkill = async (skill: BrowserSkill) => {
+    if (removingSkillId || updatingSkillId) {
+      return;
+    }
+
+    setUpdatingSkillId(skill.id);
+
+    try {
+      const outcome = await updateSkill(skill);
+
+      if (outcome.command.ok) {
+        showSuccessToast(
+          'Skill updated',
+          `${skill.name} was updated in ${scopeLabel(skill.scope)}.`
+        );
+        return;
+      }
+
+      showErrorToast('Update failed', createCommandFailureMessage(outcome.command));
+    } catch (error) {
+      showErrorToast('Update request failed', getErrorMessage(error));
+    } finally {
+      setUpdatingSkillId(null);
+    }
+  };
+
   const handleSearch = async () => {
     const query = searchQuery.trim();
     if (query.length === 0) {
@@ -296,7 +354,6 @@ export function BrowsePage() {
 
   const applySearchResultSource = (source: string) => {
     setInstallSource(source);
-    setInstallStatus(null);
   };
 
   const handlePreviewSearchResult = (result: SearchResultSkill) => {
@@ -312,15 +369,11 @@ export function BrowsePage() {
 
     const source = installSource.trim();
     if (source.length === 0 || isInstalling) {
-      setInstallStatus({
-        tone: 'error',
-        message: 'Skill source is required.',
-      });
+      showErrorToast('Install failed', 'Skill source is required.');
       return;
     }
 
     setIsInstalling(true);
-    setInstallStatus(null);
 
     let response: InstallSkillsResponse;
     try {
@@ -333,43 +386,26 @@ export function BrowsePage() {
         previousState: payload.installedState,
       });
     } catch (error) {
-      setInstallStatus({
-        tone: 'error',
-        message: `Install request failed: ${getErrorMessage(error)}`,
-      });
+      showErrorToast('Install request failed', getErrorMessage(error));
       setIsInstalling(false);
       return;
     }
-
-    const status = response.command.ok ? 'success' : 'failure';
-    setInstallOutcome({
-      status,
-      source,
-      scope: installScope,
-      command: response.command,
-    });
 
     if (!response.command.ok) {
-      setInstallStatus({
-        tone: 'error',
-        message: createCommandFailureMessage(response.command),
-      });
+      showErrorToast('Install failed', createCommandFailureMessage(response.command));
       setIsInstalling(false);
       return;
     }
 
-    setInstallStatus({
-      tone: 'success',
-      message: `Installed "${source}" in ${scopeLabel(installScope)} scope.`,
-    });
+    showSuccessToast('Skill installed', `${source} was installed in ${scopeLabel(installScope)}.`);
 
     try {
       await refresh();
     } catch (error) {
-      setInstallStatus({
-        tone: 'error',
-        message: `Install succeeded but refresh failed: ${getErrorMessage(error)}`,
-      });
+      showErrorToast(
+        'Refresh failed',
+        `Install succeeded, but refresh failed: ${getErrorMessage(error)}`
+      );
     } finally {
       setIsInstalling(false);
     }
@@ -525,6 +561,33 @@ export function BrowsePage() {
                     <Button
                       size="icon-sm"
                       variant="ghost"
+                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                      aria-label={`Update ${skill.name}`}
+                      onClick={() => void handleUpdateSkill(skill)}
+                    >
+                      {updatingSkillId === skill.id ? (
+                        <LoadingGlyph label={`Updating ${skill.name}`} />
+                      ) : (
+                        <RefreshCw className="size-4" />
+                      )}
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                      aria-label={`Remove ${skill.name}`}
+                      onClick={() => void handleRemoveSkill(skill)}
+                    >
+                      {removingSkillId === skill.id ? (
+                        <LoadingGlyph label={`Removing ${skill.name}`} />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
                       aria-label={`Copy install command for ${skill.name}`}
                       onClick={() => void handleCopyCommand(skill)}
                     >
@@ -567,8 +630,6 @@ export function BrowsePage() {
           ))}
         </div>
       )}
-
-      {installOutcome ? <InstallOperationCard outcome={installOutcome} /> : null}
 
       <Dialog open={isInstallDialogOpen} onOpenChange={handleInstallDialogOpenChange}>
         <DialogContent
@@ -765,24 +826,6 @@ export function BrowsePage() {
                                 className="h-8 text-xs"
                               />
                             </div>
-
-                            {installStatus ? (
-                              <StatusBanner
-                                className={
-                                  installStatus.tone === 'error'
-                                    ? 'border-destructive/40 bg-destructive/5'
-                                    : 'border-emerald-500/40 bg-emerald-500/5'
-                                }
-                                icon={
-                                  installStatus.tone === 'error' ? (
-                                    <X className="size-4 text-destructive" />
-                                  ) : (
-                                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                                  )
-                                }
-                                message={installStatus.message}
-                              />
-                            ) : null}
                           </form>
                         ) : null}
                       </>

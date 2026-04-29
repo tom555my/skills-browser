@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import { parseAsStringEnum, useQueryState } from 'nuqs';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-react';
+import { Toaster } from 'sileo';
 
 import { Button, buttonVariants } from '../components/ui/button';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
@@ -12,11 +13,23 @@ import type { ScopeFilter, Theme } from './types';
 import { getThemeFromDom, scopeLabel } from './utils';
 
 export function RootLayout() {
+  const [theme, setTheme] = useState<Theme>(getThemeFromDom);
+
+  useEffect(() => {
+    setTheme(getThemeFromDom());
+  }, []);
+
   return (
     <DashboardDataProvider>
+      <Toaster
+        position="top-left"
+        offset={{ top: 64, left: 16 }}
+        theme="light"
+        options={{ duration: 4200, roundness: 8 }}
+      />
       <div className="min-h-svh bg-background">
         <NuqsAdapter>
-          <TopBar />
+          <TopBar theme={theme} onThemeChange={setTheme} />
           <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
             <Outlet />
           </main>
@@ -26,9 +39,8 @@ export function RootLayout() {
   );
 }
 
-function TopBar() {
+function TopBar(props: { theme: Theme; onThemeChange: (theme: Theme) => void }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>(getThemeFromDom);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -39,19 +51,15 @@ function TopBar() {
     parseAsStringEnum<ScopeFilter>(['all', 'project', 'global']).withDefault('all')
   );
 
-  useEffect(() => {
-    setTheme(getThemeFromDom());
-  }, []);
-
   const isBrowseActive = pathname === '/' || pathname.startsWith('/skill/');
   const showScopeFilter = pathname === '/';
 
   const toggleTheme = () => {
-    const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
+    const nextTheme: Theme = props.theme === 'dark' ? 'light' : 'dark';
 
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
     localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-    setTheme(nextTheme);
+    props.onThemeChange(nextTheme);
   };
 
   const openInstallDialog = () => {
@@ -120,7 +128,7 @@ function TopBar() {
           </Button>
 
           <Button variant="ghost" size="icon-sm" onClick={toggleTheme} aria-label="Toggle theme">
-            {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {props.theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
 
           <Button

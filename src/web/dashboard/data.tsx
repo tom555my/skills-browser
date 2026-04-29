@@ -9,7 +9,7 @@ import type { BrowserSkill, DashboardActionsValue, DashboardDataValue } from './
 
 const DashboardDataContext = createContext<DashboardDataValue | null>(null);
 const DashboardActionsContext = createContext<DashboardActionsValue | null>(null);
-const dashboardQueryKey = ['dashboard', 'state'] as const;
+export const dashboardQueryKey = ['dashboard', 'state'] as const;
 
 export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
