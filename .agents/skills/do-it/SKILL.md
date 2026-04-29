@@ -42,6 +42,10 @@ For each task increment:
 - Run targeted tests first, then broader checks as needed.
 - Verify edge cases, error paths, and user-visible behavior.
 - Validate in-browser for UI work and in-terminal/service context for CLI or backend work.
+  - You should use the following tools if applicable:
+    - `agent-browser`
+    - `playwright-cli`
+    - other relevant tools for the project and task at hand
 - State exactly what could not be validated and why.
 
 ## 6) Close with a clear handoff
