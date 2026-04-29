@@ -273,17 +273,8 @@ export function LoadingIndicator(props: { label: string; className?: string }) {
 
 export function PageLoadingState() {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex min-h-20 items-center justify-center rounded-lg border bg-card">
-        <LoadingIndicator label="Loading skills" />
-      </div>
-      <Skeleton className="h-16 rounded-lg border" />
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Skeleton className="h-24 rounded-lg border" />
-        <Skeleton className="h-24 rounded-lg border" />
-        <Skeleton className="h-24 rounded-lg border" />
-      </div>
-      <Skeleton className="h-72 rounded-lg border" />
+    <div className="flex flex-1 w-full h-full items-center justify-center">
+      <LoadingIndicator label="Loading skills" />
     </div>
   );
 }

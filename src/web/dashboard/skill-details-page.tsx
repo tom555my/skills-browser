@@ -1,28 +1,36 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, BookOpenText } from 'lucide-react';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { ArrowLeft, BookOpenText, RefreshCw, Trash2 } from 'lucide-react';
 
-import { fetchSkillReadme } from '../api';
 import { Badge } from '../components/ui/badge';
-import { buttonVariants } from '../components/ui/button';
+import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { Skeleton } from '../components/ui/skeleton';
+import { fetchSkillReadme } from '../api';
 import { AgentBadge } from './agent-badge';
-import { PageLoadingState } from './components';
+import { AnimatedText, LoadingGlyph, PageLoadingState } from './components';
 import { useDashboardData } from './data';
+import { useSkillActions } from './skill-actions';
 import {
   SkillMarkdown,
   type SkillFrontmatterValue,
   parseSkillFrontmatterAttributes,
   parseSkillMarkdownDocument,
 } from './skill-markdown';
-import { formatDateTime, getErrorMessage, scopeLabel } from './utils';
+import { showErrorToast, showSuccessToast } from './toasts';
+import { confirm } from './confirm';
+import { createCommandFailureMessage, formatDateTime, getErrorMessage, scopeLabel } from './utils';
 
 export function SkillDetailsPage() {
   const { skillId } = useParams({ from: '/skill/$skillId' });
+  const navigate = useNavigate();
   const { isInitialLoading, payload, skills, getSkillById } = useDashboardData();
+  const { removeSkill, updateSkill } = useSkillActions();
   const skill = getSkillById(skillId);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const {
     data: skillReadmePayload,
     error: skillReadmeError,
@@ -38,6 +46,64 @@ export function SkillDetailsPage() {
     },
     enabled: Boolean(skill),
   });
+
+    const handleRemoveSkill = async () => {
+     if (!skill || isRemoving || isUpdating) {
+       return;
+     }
+ 
+     const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
+     if (!confirmed) {
+       return;
+     }
+
+    setIsRemoving(true);
+
+    try {
+      const outcome = await removeSkill(skill);
+
+      if (outcome.command.ok) {
+        showSuccessToast(
+          'Skill removed',
+          `${skill.name} was removed from ${scopeLabel(skill.scope)}.`
+        );
+        await navigate({ to: '/' });
+        return;
+      }
+
+      showErrorToast('Remove failed', createCommandFailureMessage(outcome.command));
+    } catch (error) {
+      showErrorToast('Remove request failed', getErrorMessage(error));
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
+  const handleUpdateSkill = async () => {
+    if (!skill || isRemoving || isUpdating) {
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      const outcome = await updateSkill(skill);
+
+      if (outcome.command.ok) {
+        showSuccessToast(
+          'Skill updated',
+          `${skill.name} was updated in ${scopeLabel(skill.scope)}.`
+        );
+        return;
+      }
+
+      showErrorToast('Update failed', createCommandFailureMessage(outcome.command));
+    } catch (error) {
+      showErrorToast('Update request failed', getErrorMessage(error));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   if (isInitialLoading && skills.length === 0) {
     return <PageLoadingState />;
@@ -72,22 +138,57 @@ export function SkillDetailsPage() {
       </Link>
 
       <div className="flex flex-col gap-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-mono text-2xl font-semibold">{skill.name}</h1>
-            <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
-            {skill.sourceType ? <Badge variant="outline">{skill.sourceType}</Badge> : null}
-            {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-mono text-2xl font-semibold">{skill.name}</h1>
+              <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
+              {skill.sourceType ? <Badge variant="outline">{skill.sourceType}</Badge> : null}
+              {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+            </div>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{skill.description}</p>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>{skill.primarySource}</span>
+              <span className="text-border">•</span>
+              <span>
+                {skill.activityAt
+                  ? `Updated ${formatDateTime(skill.activityAt)}`
+                  : 'No update timestamp available'}
+              </span>
+            </div>
           </div>
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{skill.description}</p>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{skill.primarySource}</span>
-            <span className="text-border">•</span>
-            <span>
-              {skill.activityAt
-                ? `Updated ${formatDateTime(skill.activityAt)}`
-                : 'No update timestamp available'}
-            </span>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isUpdating || isRemoving}
+              onClick={() => void handleUpdateSkill()}
+            >
+              {isUpdating ? (
+                <LoadingGlyph label={`Updating ${skill.name}`} />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              <AnimatedText className="text-left">
+                {isUpdating ? 'Updating' : 'Update'}
+              </AnimatedText>
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isUpdating || isRemoving}
+              onClick={() => void handleRemoveSkill()}
+            >
+              {isRemoving ? (
+                <LoadingGlyph label={`Removing ${skill.name}`} />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              <AnimatedText className="text-left">
+                {isRemoving ? 'Removing' : 'Remove'}
+              </AnimatedText>
+            </Button>
           </div>
         </div>
 
