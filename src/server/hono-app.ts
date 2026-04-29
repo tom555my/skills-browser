@@ -157,6 +157,10 @@ const createOperationFailureMessage = (result: SkillsCommandResult): string => {
   return `Command "${command}" failed (exit code ${exitCode}).`;
 };
 
+const getErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
 const defaultCommandAdapter = createSkillsCommandAdapter();
 
 const getSearchQuery = (value: unknown): string | undefined => {
@@ -182,6 +186,27 @@ const createDashboardPayload = async (options: {
       previousState: options.previousState,
     }),
   };
+};
+
+const createDashboardMutationPayload = async (options: {
+  loadInstalledState: typeof loadInstalledSkillsState;
+  previousState?: InstalledSkillsState;
+  scope: SkillScope;
+  command: SkillsCommandResult;
+}): Promise<DashboardPayload> => {
+  const payload = await createDashboardPayload({
+    loadInstalledState: options.loadInstalledState,
+    previousState: options.previousState,
+  });
+  const scopeState = payload.installedState[options.scope];
+
+  payload.installedState[options.scope] = {
+    ...scopeState,
+    command: options.command,
+    error: options.command.ok ? scopeState.error : createOperationFailureMessage(options.command),
+  };
+
+  return payload;
 };
 
 export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
@@ -265,16 +290,12 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       agents: request.agents,
     });
 
-    const payload = await createDashboardPayload({
+    const payload = await createDashboardMutationPayload({
       loadInstalledState,
       previousState: request.previousState,
-    });
-    const scopeState = payload.installedState[request.scope];
-    payload.installedState[request.scope] = {
-      ...scopeState,
+      scope: request.scope,
       command,
-      error: command.ok ? scopeState.error : createOperationFailureMessage(command),
-    };
+    });
 
     return context.json({
       payload,
@@ -315,16 +336,12 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       copy: request.copy,
     });
 
-    const payload = await createDashboardPayload({
+    const payload = await createDashboardMutationPayload({
       loadInstalledState,
       previousState: request.previousState,
-    });
-    const scopeState = payload.installedState[request.scope];
-    payload.installedState[request.scope] = {
-      ...scopeState,
+      scope: request.scope,
       command,
-      error: command.ok ? scopeState.error : createOperationFailureMessage(command),
-    };
+    });
 
     const response: InstallSkillsResponse = {
       payload,
@@ -405,7 +422,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     } catch (error) {
       return context.json(
         {
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
         },
         400
       );
@@ -433,7 +450,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     } catch (error) {
       return context.json(
         {
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
         },
         400
       );

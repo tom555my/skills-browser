@@ -23,7 +23,13 @@ export function SkillDetailsPage() {
     isPending: isSkillReadmePending,
   } = useQuery({
     queryKey: ['installed-skill-readme', skill?.id],
-    queryFn: async () => fetchSkillReadme(skill?.id ?? ''),
+    queryFn: async () => {
+      if (!skill) {
+        throw new Error('Skill id is required.');
+      }
+
+      return fetchSkillReadme(skill.id);
+    },
     enabled: Boolean(skill),
   });
 

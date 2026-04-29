@@ -16,20 +16,34 @@ export const buildSkills = (installedState: InstalledSkillsState): BrowserSkill[
 
   return merged
     .map((skill) => {
+      const description = buildSkillDescription(skill);
+      const primarySource = skill.source ?? skill.path ?? 'Unknown source';
+      const activityAt = skill.updatedAt ?? skill.installedAt ?? null;
+      const activityTimestamp = activityAt ? Date.parse(activityAt) : 0;
+
       return {
         ...skill,
-        description: buildSkillDescription(skill),
-        primarySource: skill.source ?? skill.path ?? 'Unknown source',
-        activityAt: skill.updatedAt ?? skill.installedAt ?? null,
+        description,
+        primarySource,
+        activityAt,
+        activityTimestamp: Number.isNaN(activityTimestamp) ? 0 : activityTimestamp,
         installCommand: buildInstallCommand(skill),
+        searchableText: [
+          skill.name,
+          description,
+          primarySource,
+          skill.scope,
+          skill.sourceType ?? '',
+          skill.ref ?? '',
+          ...skill.agents,
+        ]
+          .join(' ')
+          .toLowerCase(),
       };
     })
     .sort((left, right) => {
-      const leftValue = left.activityAt ? Date.parse(left.activityAt) : 0;
-      const rightValue = right.activityAt ? Date.parse(right.activityAt) : 0;
-
-      if (leftValue !== rightValue) {
-        return rightValue - leftValue;
+      if (left.activityTimestamp !== right.activityTimestamp) {
+        return right.activityTimestamp - left.activityTimestamp;
       }
 
       return left.name.localeCompare(right.name);
