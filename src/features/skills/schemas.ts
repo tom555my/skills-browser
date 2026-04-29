@@ -5,6 +5,7 @@ import type {
   InstalledSkillsState,
   SearchPayload,
   SkillDetailsPayload,
+  SkillReadmePayload,
   SkillsCommandResult,
   UpdateSkillsResponse,
 } from './state';
@@ -102,6 +103,14 @@ export const skillDetailsPayloadSchema = z.object({
   }),
 });
 
+export const skillReadmePayloadSchema = z.object({
+  readme: z.object({
+    skillId: z.string(),
+    markdown: z.string(),
+    loadedAt: z.string(),
+  }),
+});
+
 export const updateSkillsResponseSchema = z.object({
   scope: skillScopeSchema,
   command: skillsCommandResultSchema,
@@ -162,6 +171,11 @@ export const parseSearchPayload = (value: unknown): SearchPayload | undefined =>
 export const parseSkillDetailsPayload = (value: unknown): SkillDetailsPayload | undefined => {
   const result = skillDetailsPayloadSchema.safeParse(value);
   return result.success ? (result.data as SkillDetailsPayload) : undefined;
+};
+
+export const parseSkillReadmePayload = (value: unknown): SkillReadmePayload | undefined => {
+  const result = skillReadmePayloadSchema.safeParse(value);
+  return result.success ? (result.data as SkillReadmePayload) : undefined;
 };
 
 export const parseUpdateSkillsResponse = (value: unknown): UpdateSkillsResponse | undefined => {

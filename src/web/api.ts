@@ -4,6 +4,7 @@ import type {
   InstallSkillsResponse,
   InstalledSkillsState,
   SkillDetailsPayload,
+  SkillReadmePayload,
   SearchPayload,
   SkillsCommandResult,
   UpdateSkillsRequest,
@@ -15,6 +16,7 @@ import {
   parseRecord,
   parseSearchPayload as parseSearchPayloadSchema,
   parseSkillDetailsPayload as parseSkillDetailsPayloadSchema,
+  parseSkillReadmePayload as parseSkillReadmePayloadSchema,
   parseSkillsCommandResult,
   parseUpdateSkillsResponse,
 } from '../features/skills/schemas';
@@ -95,6 +97,26 @@ const parseSkillDetailsPayload = async (response: Response): Promise<SkillDetail
 
   if (!payload) {
     throw new Error('Invalid skill details response.');
+  }
+
+  return payload;
+};
+
+const parseSkillReadmePayload = async (response: Response): Promise<SkillReadmePayload> => {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    const error = parseRecord(payload)?.error;
+    if (typeof error === 'string') {
+      throw new Error(error);
+    }
+
+    throw new Error(getErrorMessage(response));
+  }
+
+  const payload = parseSkillReadmePayloadSchema(await response.json());
+
+  if (!payload) {
+    throw new Error('Invalid skill readme response.');
   }
 
   return payload;
@@ -258,4 +280,19 @@ export const fetchSkillDetails = async (url: string): Promise<SkillDetailsPayloa
   });
 
   return parseSkillDetailsPayload(response);
+};
+
+export const fetchSkillReadme = async (skillId: string): Promise<SkillReadmePayload> => {
+  const response = await fetch('/api/skill-readme', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      skillId,
+    }),
+  });
+
+  return parseSkillReadmePayload(response);
 };

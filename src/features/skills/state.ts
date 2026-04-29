@@ -77,6 +77,16 @@ export type SkillDetailsPayload = {
   details: SkillDetailsState;
 };
 
+export type SkillReadmeState = {
+  skillId: string;
+  markdown: string;
+  loadedAt: string;
+};
+
+export type SkillReadmePayload = {
+  readme: SkillReadmeState;
+};
+
 export type UpdateSkillsRequest = {
   scope: SkillScope;
   names?: string[];
