@@ -47,15 +47,15 @@ export function SkillDetailsPage() {
     enabled: Boolean(skill),
   });
 
-    const handleRemoveSkill = async () => {
-     if (!skill || isRemoving || isUpdating) {
-       return;
-     }
- 
-     const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
-     if (!confirmed) {
-       return;
-     }
+  const handleRemoveSkill = async () => {
+    if (!skill || isRemoving || isUpdating) {
+      return;
+    }
+
+    const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
+    if (!confirmed) {
+      return;
+    }
 
     setIsRemoving(true);
 
