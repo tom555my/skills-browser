@@ -7,7 +7,6 @@ import type { SkillScope } from '../../features/skills/types';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { DotmSquare3 } from '../components/ui/dotm-square-3';
-import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import type { InstallOutcome, RemoveOutcome } from './types';
 import { scopeLabel } from './utils';
