@@ -6,6 +6,10 @@ import { removeInstalledSkills, refreshDashboardState, updateDashboardSkills } f
 import type { BrowserSkill, RemoveOutcome } from './types';
 import { dashboardQueryKey } from './data';
 
+type RemoveSkillOptions = {
+  applyPayloadDelayMs?: number;
+};
+
 export function useSkillActions() {
   const queryClient = useQueryClient();
 
@@ -14,7 +18,7 @@ export function useSkillActions() {
   }, [queryClient]);
 
   const removeSkill = useCallback(
-    async (skill: BrowserSkill): Promise<RemoveOutcome> => {
+    async (skill: BrowserSkill, options?: RemoveSkillOptions): Promise<RemoveOutcome> => {
       const currentPayload = getCurrentPayload();
       const response = await removeInstalledSkills({
         names: [skill.name],
@@ -23,13 +27,20 @@ export function useSkillActions() {
         previousState: currentPayload?.installedState,
       });
 
-      queryClient.setQueryData(dashboardQueryKey, response.payload);
+      const applyPayload = () => queryClient.setQueryData(dashboardQueryKey, response.payload);
+
+      if (response.command.ok && options?.applyPayloadDelayMs) {
+        window.setTimeout(applyPayload, options.applyPayloadDelayMs);
+      } else {
+        applyPayload();
+      }
 
       return {
         status: response.command.ok ? 'success' : 'failure',
         scope: response.scope,
         names: [skill.name],
         command: response.command,
+        payload: response.payload,
       };
     },
     [getCurrentPayload, queryClient]

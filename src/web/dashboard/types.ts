@@ -22,6 +22,7 @@ export type RemoveOutcome = {
   scope: SkillScope;
   names: string[];
   command: SkillsCommandResult;
+  payload: DashboardPayload;
 };
 
 export type InstallOutcome = {

@@ -1,11 +1,37 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Link } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
-import { ExternalLink, Package, PackagePlus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  CircleAlert,
+  ExternalLink,
+  Package,
+  PackagePlus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from '../components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import {
   Card,
@@ -31,8 +57,7 @@ export function BrowsePage() {
   const { payload, skills, isInitialLoading, errorMessage } = useDashboardData();
   const { reload, refresh } = useDashboardActions();
   const { removeSkill, updateSkill } = useSkillActions();
-  const [removingSkillId, setRemovingSkillId] = useState<string | null>(null);
-  const [updatingSkillId, setUpdatingSkillId] = useState<string | null>(null);
+  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const [search, setSearch] = useQueryState('search', parseAsString.withDefault(''));
   const [scopeFilter] = useQueryState(
     'scope',
@@ -105,43 +130,28 @@ export function BrowsePage() {
   }, [openInstallDialog]);
 
   const handleRemoveSkill = async (skill: BrowserSkill) => {
-    if (removingSkillId || updatingSkillId) {
-      return;
-    }
-
-    const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    setRemovingSkillId(skill.id);
-
     try {
-      const outcome = await removeSkill(skill);
+      const outcome = await removeSkill(skill, { applyPayloadDelayMs: 500 });
 
       if (outcome.command.ok) {
         showSuccessToast(
           'Skill removed',
           `${skill.name} was removed from ${scopeLabel(skill.scope)}.`
         );
-        return;
+        return { ok: true };
       }
 
-      showErrorToast('Remove failed', createCommandFailureMessage(outcome.command));
+      const message = createCommandFailureMessage(outcome.command);
+      showErrorToast('Remove failed', message);
+      return { ok: false, errorMessage: message };
     } catch (error) {
-      showErrorToast('Remove request failed', getErrorMessage(error));
-    } finally {
-      setRemovingSkillId(null);
+      const message = getErrorMessage(error);
+      showErrorToast('Remove request failed', message);
+      return { ok: false, errorMessage: message };
     }
   };
 
   const handleUpdateSkill = async (skill: BrowserSkill) => {
-    if (removingSkillId || updatingSkillId) {
-      return;
-    }
-
-    setUpdatingSkillId(skill.id);
-
     try {
       const outcome = await updateSkill(skill);
 
@@ -150,14 +160,16 @@ export function BrowsePage() {
           'Skill updated',
           `${skill.name} was updated in ${scopeLabel(skill.scope)}.`
         );
-        return;
+        return { ok: true };
       }
 
-      showErrorToast('Update failed', createCommandFailureMessage(outcome.command));
+      const message = createCommandFailureMessage(outcome.command);
+      showErrorToast('Update failed', message);
+      return { ok: false, errorMessage: message };
     } catch (error) {
-      showErrorToast('Update request failed', getErrorMessage(error));
-    } finally {
-      setUpdatingSkillId(null);
+      const message = getErrorMessage(error);
+      showErrorToast('Update request failed', message);
+      return { ok: false, errorMessage: message };
     }
   };
 
@@ -280,42 +292,32 @@ export function BrowsePage() {
                     </div>
 
                     <CardAction className="static col-auto row-auto flex shrink-0 items-center gap-1 self-auto justify-self-auto">
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                            aria-label={`Update ${skill.name}`}
-                            onClick={() => void handleUpdateSkill(skill)}
-                          >
-                            {updatingSkillId === skill.id ? (
-                              <Spinner label={`Updating ${skill.name}`} />
-                            ) : (
-                              <RefreshCw className="size-4" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Update</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                            aria-label={`Remove ${skill.name}`}
-                            onClick={() => void handleRemoveSkill(skill)}
-                          >
-                            {removingSkillId === skill.id ? (
-                              <Spinner label={`Removing ${skill.name}`} />
-                            ) : (
-                              <Trash2 className="size-4" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Remove</TooltipContent>
-                      </Tooltip>
+                      <SkillCardActionButton
+                        actionKey={`update:${skill.id}`}
+                        ariaLabel={`Update ${skill.name}`}
+                        disabled={pendingActionKey !== null}
+                        errorTitle="Update failed"
+                        idleIcon={<RefreshCw className="size-4" />}
+                        loadingLabel={`Updating ${skill.name}`}
+                        onPendingChange={setPendingActionKey}
+                        onAction={() => handleUpdateSkill(skill)}
+                        tooltip="Update"
+                      />
+                      <SkillCardActionButton
+                        actionKey={`remove:${skill.id}`}
+                        ariaLabel={`Remove ${skill.name}`}
+                        disabled={pendingActionKey !== null}
+                        errorTitle="Remove failed"
+                        idleIcon={<Trash2 className="size-4" />}
+                        loadingLabel={`Removing ${skill.name}`}
+                        onPendingChange={setPendingActionKey}
+                        onBeforeAction={() =>
+                          confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`)
+                        }
+                        onAction={() => handleRemoveSkill(skill)}
+                        tooltip="Remove"
+                        variant="ghost"
+                      />
                       <Tooltip>
                         <TooltipTrigger>
                           <Link
@@ -359,5 +361,158 @@ export function BrowsePage() {
         onInstalled={refresh}
       />
     </div>
+  );
+}
+
+type SkillCardActionStatus = 'idle' | 'loading' | 'success' | 'error';
+
+type SkillCardActionResult = {
+  ok: boolean;
+  errorMessage?: string;
+};
+
+function SkillCardActionButton({
+  actionKey,
+  ariaLabel,
+  disabled,
+  errorTitle,
+  idleIcon,
+  loadingLabel,
+  onAction,
+  onBeforeAction,
+  onPendingChange,
+  tooltip,
+  variant = 'ghost',
+}: {
+  actionKey: string;
+  ariaLabel: string;
+  disabled: boolean;
+  errorTitle: string;
+  idleIcon: ReactNode;
+  loadingLabel: string;
+  onAction: () => Promise<SkillCardActionResult>;
+  onBeforeAction?: () => Promise<boolean>;
+  onPendingChange: (actionKey: string | null) => void;
+  tooltip: string;
+  variant?: React.ComponentProps<typeof Button>['variant'];
+}) {
+  const [status, setStatus] = useState<SkillCardActionStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleReset = (delay: number) => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = window.setTimeout(() => {
+      setStatus('idle');
+      setErrorMessage(null);
+      setIsPopoverOpen(false);
+      timerRef.current = null;
+    }, delay);
+  };
+
+  const handleClick = async () => {
+    if (disabled || status === 'loading') {
+      return;
+    }
+
+    if (onBeforeAction) {
+      const shouldContinue = await onBeforeAction();
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    setStatus('loading');
+    setErrorMessage(null);
+    setIsPopoverOpen(false);
+    onPendingChange(actionKey);
+
+    try {
+      const result = await onAction();
+
+      if (result.ok) {
+        setStatus('success');
+        scheduleReset(500);
+        return;
+      }
+
+      setStatus('error');
+      setErrorMessage(result.errorMessage ?? errorTitle);
+      setIsPopoverOpen(true);
+      scheduleReset(3000);
+    } finally {
+      onPendingChange(null);
+    }
+  };
+
+  const icon = (() => {
+    if (status === 'loading') {
+      return <Spinner label={loadingLabel} />;
+    }
+
+    if (status === 'success') {
+      return <Check className="size-4 text-emerald-600 dark:text-emerald-400" />;
+    }
+
+    if (status === 'error') {
+      return <CircleAlert className="size-4 text-destructive" />;
+    }
+
+    return idleIcon;
+  })();
+
+  return (
+    <Tooltip>
+      <Popover
+        open={isPopoverOpen}
+        onOpenChange={(open) => setIsPopoverOpen(status === 'error' ? open : false)}
+      >
+        <PopoverTrigger
+          render={
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant={variant}
+                  disabled={disabled || status === 'loading'}
+                  aria-label={ariaLabel}
+                  aria-invalid={status === 'error' || undefined}
+                  onClick={() => void handleClick()}
+                >
+                  {icon}
+                </Button>
+              }
+            />
+          }
+        />
+        <PopoverContent side="bottom" align="end" className="w-80">
+          <PopoverHeader>
+            <PopoverTitle className="flex items-center gap-2 text-destructive">
+              <CircleAlert className="size-4" />
+              {errorTitle}
+            </PopoverTitle>
+            <PopoverDescription className="break-words">{errorMessage}</PopoverDescription>
+          </PopoverHeader>
+        </PopoverContent>
+      </Popover>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
