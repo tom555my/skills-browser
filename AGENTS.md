@@ -44,6 +44,6 @@ bun run format       # oxfmt "src/**/*.{ts,tsx}"
 ## Code Style
 
 - oxfmt, not Prettier: single quotes, semicolons, 100-column width, trailing commas where valid in ES5, LF endings.
-- `.oxfmtrc.json` sorts Tailwind classes in `cn()` and `cva()` calls, but its `sortTailwindcss.stylesheet` path currently points at stale `packages/ui/src/styles/globals.css`; do not treat that path as real app structure.
+- `.oxfmtrc.json` sorts Tailwind classes in `cn()` and `cva()` calls using `src/web/styles/globals.css` as the Tailwind v4 stylesheet.
 - TypeScript is strict with `noUnusedLocals` and `noUnusedParameters`; keep test doubles and imports minimal.
 - Avoid comments unless they explain non-obvious behavior.

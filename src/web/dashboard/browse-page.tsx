@@ -23,6 +23,7 @@ import {
 
 import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import {
   Card,
   CardAction,
@@ -314,53 +315,73 @@ export function BrowsePage() {
                   </div>
 
                   <CardAction className="static col-auto row-auto flex shrink-0 items-center gap-1 self-auto justify-self-auto">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                      aria-label={`Update ${skill.name}`}
-                      onClick={() => void handleUpdateSkill(skill)}
-                    >
-                      {updatingSkillId === skill.id ? (
-                        <LoadingGlyph label={`Updating ${skill.name}`} />
-                      ) : (
-                        <RefreshCw className="size-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                      aria-label={`Remove ${skill.name}`}
-                      onClick={() => void handleRemoveSkill(skill)}
-                    >
-                      {removingSkillId === skill.id ? (
-                        <LoadingGlyph label={`Removing ${skill.name}`} />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                      aria-label={`Copy install command for ${skill.name}`}
-                      onClick={() => void handleCopyCommand(skill)}
-                    >
-                      {copiedSkillId === skill.id ? (
-                        <Check className="size-4" />
-                      ) : (
-                        <Copy className="size-4" />
-                      )}
-                    </Button>
-                    <Link
-                      to="/skill/$skillId"
-                      params={{ skillId: skill.id }}
-                      aria-label={`Open ${skill.name} details`}
-                      className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-                    >
-                      <ExternalLink className="size-4" />
-                    </Link>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                          aria-label={`Update ${skill.name}`}
+                          onClick={() => void handleUpdateSkill(skill)}
+                        >
+                          {updatingSkillId === skill.id ? (
+                            <LoadingGlyph label={`Updating ${skill.name}`} />
+                          ) : (
+                            <RefreshCw className="size-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Update</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                          aria-label={`Remove ${skill.name}`}
+                          onClick={() => void handleRemoveSkill(skill)}
+                        >
+                          {removingSkillId === skill.id ? (
+                            <LoadingGlyph label={`Removing ${skill.name}`} />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                          aria-label={`Copy install command for ${skill.name}`}
+                          onClick={() => void handleCopyCommand(skill)}
+                        >
+                          {copiedSkillId === skill.id ? (
+                            <Check className="size-4" />
+                          ) : (
+                            <Copy className="size-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copy install command</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Link
+                          to="/skill/$skillId"
+                          params={{ skillId: skill.id }}
+                          aria-label={`Open ${skill.name} details`}
+                          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                        >
+                          <ExternalLink className="size-4" />
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>Details</TooltipContent>
+                    </Tooltip>
                   </CardAction>
                 </div>
               </CardHeader>

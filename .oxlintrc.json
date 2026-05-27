@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "import"],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2022": true
+  },
+  "settings": {
+    "react": {
+      "version": "19.2.4"
+    }
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "coverage/", ".tanstack/"],
+  "rules": {
+    "no-unused-vars": "error",
+    "react/react-in-jsx-scope": "off",
+    "typescript/no-explicit-any": "warn"
+  }
+}
