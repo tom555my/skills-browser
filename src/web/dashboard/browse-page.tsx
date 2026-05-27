@@ -4,14 +4,11 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { Link } from '@tanstack/react-router';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import {
-  Check,
-  Copy,
   ExternalLink,
   Package,
   PackagePlus,
@@ -48,7 +45,6 @@ export function BrowsePage() {
   const { payload, skills, isInitialLoading, errorMessage } = useDashboardData();
   const { reload, refresh } = useDashboardActions();
   const { removeSkill, updateSkill } = useSkillActions();
-  const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
   const [removingSkillId, setRemovingSkillId] = useState<string | null>(null);
   const [updatingSkillId, setUpdatingSkillId] = useState<string | null>(null);
   const [search, setSearch] = useQueryState('search', parseAsString.withDefault(''));
@@ -62,8 +58,6 @@ export function BrowsePage() {
   );
   const [, setPreviewId] = useQueryState('preview');
   const deferredSearch = useDeferredValue(search);
-  const copyResetTimeoutRef = useRef<number | null>(null);
-
   const visibleSkills = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLowerCase();
 
@@ -123,30 +117,6 @@ export function BrowsePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [openInstallDialog]);
-
-  useEffect(() => {
-    return () => {
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopyCommand = async (skill: BrowserSkill) => {
-    try {
-      await navigator.clipboard.writeText(skill.installCommand);
-      setCopiedSkillId(skill.id);
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-      }
-      copyResetTimeoutRef.current = window.setTimeout(() => {
-        setCopiedSkillId((current) => (current === skill.id ? null : current));
-        copyResetTimeoutRef.current = null;
-      }, 1200);
-    } catch {
-      setCopiedSkillId(null);
-    }
-  };
 
   const handleRemoveSkill = async (skill: BrowserSkill) => {
     if (removingSkillId || updatingSkillId) {
@@ -350,24 +320,6 @@ export function BrowsePage() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Remove</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                          aria-label={`Copy install command for ${skill.name}`}
-                          onClick={() => void handleCopyCommand(skill)}
-                        >
-                          {copiedSkillId === skill.id ? (
-                            <Check className="size-4" />
-                          ) : (
-                            <Copy className="size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Copy install command</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger>
