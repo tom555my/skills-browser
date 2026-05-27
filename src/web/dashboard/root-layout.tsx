@@ -21,7 +21,13 @@ export function RootLayout() {
 
   return (
     <DashboardDataProvider>
-      <Toaster position="top-left" offset={{ top: 64, left: 16 }} theme={theme} duration={4200} />
+      <Toaster
+        position="top-center"
+        richColors
+        offset={{ top: 64, left: 16 }}
+        theme={theme}
+        duration={4200}
+      />
       <div className="min-h-svh bg-background">
         <NuqsAdapter>
           <TopBar theme={theme} onThemeChange={setTheme} />
