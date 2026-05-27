@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { RefreshCw, TerminalSquare } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TextMorph } from 'torph/react';
+import spinners from 'unicode-animations';
+import type { BrailleSpinnerName } from 'unicode-animations';
 
 import type { InstalledSkillsScopeState, UpdateSkillsResponse } from '../../features/skills/state';
 import type { SkillScope } from '../../features/skills/types';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { DotmSquare18 } from '../components/ui/dotm-square-18';
 import { cn } from '../lib/utils';
 import type { InstallOutcome, RemoveOutcome } from './types';
 import { scopeLabel } from './utils';
@@ -262,17 +263,27 @@ export function AnimatedText(props: { children: string; className?: string; as?:
 export function Spinner(props: {
   label?: string;
   className?: string;
+  name?: BrailleSpinnerName;
   size?: number;
-  dotSize?: number;
 }) {
+  const name = props.name ?? 'braille';
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    const s = spinners[name];
+    const timer = setInterval(() => setFrame((f) => (f + 1) % s.frames.length), s.interval);
+    return () => clearInterval(timer);
+  }, [name]);
+
   return (
-    <DotmSquare18
-      ariaLabel={props.label ?? 'Loading'}
-      className={props.className}
-      color="currentColor"
-      dotSize={props.dotSize ?? 3}
-      boxSize={props.size ?? 18}
-    />
+    <span
+      aria-label={props.label ?? 'Loading'}
+      className={cn('font-mono', props.className)}
+      role="status"
+      style={props.size ? { fontSize: props.size } : undefined}
+    >
+      {spinners[name].frames[frame]}
+    </span>
   );
 }
 
@@ -284,7 +295,7 @@ export function LoadingIndicator(props: { label: string; className?: string }) {
         props.className
       )}
     >
-      <Spinner label={props.label} />
+      <Spinner name="helix" label={props.label} size={16} />
       <AnimatedText>{props.label}</AnimatedText>
     </div>
   );

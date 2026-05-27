@@ -118,7 +118,7 @@ function TopBar(props: { theme: Theme; onThemeChange: (theme: Theme) => void }) 
             aria-label="Refresh installed skills"
           >
             {isRefreshing ? (
-              <Spinner label="Refreshing installed skills" size={14} />
+              <Spinner label="Refreshing installed skills" />
             ) : (
               <RefreshCw className="size-4" />
             )}
