@@ -1,6 +1,6 @@
 {
   "name": "skills-browser",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Local web UI for managing AI agent skills through the skills CLI.",
   "license": "MIT",
   "bin": {
