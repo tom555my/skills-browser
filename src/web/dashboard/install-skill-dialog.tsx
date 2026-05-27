@@ -1,27 +1,23 @@
+import { useQuery } from '@tanstack/react-query';
+import { BookOpenText, Eye, PackagePlus, X, XIcon } from 'lucide-react';
+import { useQueryState } from 'nuqs';
 import {
   type CSSProperties,
-  type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useQueryState } from 'nuqs';
-import { BookOpenText, Eye, ExternalLink, PackagePlus, X } from 'lucide-react';
 
 import type {
   DashboardPayload,
-  InstallSkillsResponse,
   SearchResultSkill,
   SkillDetailsState,
 } from '../../features/skills/state';
-import type { SkillScope } from '../../features/skills/types';
-import { fetchSkillDetails, installDashboardSkills, searchSkills } from '../api';
+import { fetchSkillDetails, searchSkills } from '../api';
 import { Badge } from '../components/ui/badge';
-import { Button, buttonVariants } from '../components/ui/button';
-import { Checkbox } from '../components/ui/checkbox';
+import { Button } from '../components/ui/button';
 import {
   Command,
   CommandGroup,
@@ -31,31 +27,17 @@ import {
 } from '../components/ui/command';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Input } from '../components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import { AnimatedText, LoadingGlyph, LoadingIndicator, StatusBanner } from './components';
-import { showErrorToast, showSuccessToast } from './toasts';
 import type { SearchStatus } from './types';
-import {
-  createCommandFailureMessage,
-  getErrorMessage,
-  parseCommaSeparatedValues,
-  scopeLabel,
-} from './utils';
+import { getErrorMessage } from './utils';
 
 type InstallSkillDialogProps = {
   open: boolean;
@@ -64,22 +46,13 @@ type InstallSkillDialogProps = {
   onInstalled: () => Promise<void>;
 };
 
-export function InstallSkillDialog({
-  open,
-  onOpenChange,
-  payload,
-  onInstalled,
-}: InstallSkillDialogProps) {
+export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogProps) {
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
   const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
   const [searchParseWarning, setSearchParseWarning] = useState<string | null>(null);
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [installSource, setInstallSource] = useState('');
-  const [installScope, setInstallScope] = useState<SkillScope>('project');
-  const [installAgentsInput, setInstallAgentsInput] = useState('');
-  const [installSkillsInput, setInstallSkillsInput] = useState('');
-  const [installCopy, setInstallCopy] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const installSearchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useQueryState('q');
@@ -178,56 +151,6 @@ export function InstallSkillDialog({
     setInstallSource(result.source);
   };
 
-  const handleInstall = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!payload) {
-      return;
-    }
-
-    const source = installSource.trim();
-    if (source.length === 0 || isInstalling) {
-      showErrorToast('Install failed', 'Skill source is required.');
-      return;
-    }
-
-    setIsInstalling(true);
-
-    let response: InstallSkillsResponse;
-    try {
-      response = await installDashboardSkills({
-        source,
-        scope: installScope,
-        agents: parseCommaSeparatedValues(installAgentsInput),
-        skills: parseCommaSeparatedValues(installSkillsInput),
-        copy: installCopy,
-        previousState: payload.installedState,
-      });
-    } catch (error) {
-      showErrorToast('Install request failed', getErrorMessage(error));
-      setIsInstalling(false);
-      return;
-    }
-
-    if (!response.command.ok) {
-      showErrorToast('Install failed', createCommandFailureMessage(response.command));
-      setIsInstalling(false);
-      return;
-    }
-
-    showSuccessToast('Skill installed', `${source} was installed in ${scopeLabel(installScope)}.`);
-
-    try {
-      await onInstalled();
-    } catch (error) {
-      showErrorToast(
-        'Refresh failed',
-        `Install succeeded, but refresh failed: ${getErrorMessage(error)}`
-      );
-    } finally {
-      setIsInstalling(false);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -237,7 +160,7 @@ export function InstallSkillDialog({
             ? 'grid h-[calc(100svh-3rem)] max-w-[calc(100%-2rem)] gap-4 sm:max-w-[calc(100%-3rem)] lg:max-w-7xl lg:grid-cols-[22rem_minmax(0,1fr)]'
             : 'max-w-3xl sm:max-w-3xl'
         )}
-        showCloseButton={Boolean(selectedPreview)}
+        showCloseButton={false}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Install skill</DialogTitle>
@@ -279,7 +202,7 @@ export function InstallSkillDialog({
                     <CommandGroup>
                       <LoadingIndicator
                         label={`Searching for "${lastSearchQuery}"`}
-                        className="px-1 w-full text-center"
+                        className="w-full px-1 text-center"
                       />
                     </CommandGroup>
                   ) : null}
@@ -339,89 +262,6 @@ export function InstallSkillDialog({
                           );
                         })}
                       </CommandGroup>
-
-                      {selectedPreview ? (
-                        <form
-                          className="mt-3 space-y-3 rounded-lg border bg-background p-3 duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1"
-                          onSubmit={handleInstall}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-mono text-sm font-medium">
-                                {selectedPreview.source}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">Ready to add</p>
-                            </div>
-                            <Button size="sm" disabled={isInstalling} type="submit">
-                              {isInstalling ? (
-                                <LoadingGlyph label="Adding skill" />
-                              ) : (
-                                <PackagePlus className="size-4" />
-                              )}
-                              <AnimatedText className="min-w-10 text-left">
-                                {isInstalling ? 'Adding' : 'Add'}
-                              </AnimatedText>
-                            </Button>
-                          </div>
-
-                          <Input
-                            value={installSource}
-                            onChange={(event) => setInstallSource(event.target.value)}
-                            className="h-8 font-mono text-xs"
-                            aria-label="Install source"
-                            disabled={isInstalling}
-                          />
-
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <Select
-                              value={installScope}
-                              disabled={isInstalling}
-                              onValueChange={(value) =>
-                                setInstallScope(value === 'global' ? 'global' : 'project')
-                              }
-                            >
-                              <SelectTrigger
-                                className="h-8 w-full text-xs"
-                                aria-label="Install scope"
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectGroup>
-                                  <SelectItem value="project">Project</SelectItem>
-                                  <SelectItem value="global">Global</SelectItem>
-                                </SelectGroup>
-                              </SelectContent>
-                            </Select>
-                            <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
-                              <Checkbox
-                                checked={installCopy}
-                                disabled={isInstalling}
-                                onCheckedChange={(checked) => setInstallCopy(checked === true)}
-                                className="size-3.5"
-                              />
-                              <span>Copy files</span>
-                            </label>
-                          </div>
-
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <Input
-                              value={installAgentsInput}
-                              onChange={(event) => setInstallAgentsInput(event.target.value)}
-                              placeholder="Agents"
-                              disabled={isInstalling}
-                              className="h-8 text-xs"
-                            />
-                            <Input
-                              value={installSkillsInput}
-                              onChange={(event) => setInstallSkillsInput(event.target.value)}
-                              placeholder="Skill filters"
-                              disabled={isInstalling}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                        </form>
-                      ) : null}
                     </>
                   ) : null}
 
@@ -435,25 +275,40 @@ export function InstallSkillDialog({
         </div>
 
         {selectedPreview ? (
-          <section className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-right-2 lg:block">
+          <section className="hidden min-h-0 animate-in overflow-hidden rounded-xl border bg-card shadow-lg duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-right-2 lg:block">
             <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
               <div className="min-w-0">
                 <p className="truncate font-mono text-sm font-medium">{selectedPreview.source}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {selectedPreviewUrl ?? 'No preview URL available'}
-                </p>
-              </div>
-              {selectedPreviewUrl ? (
                 <a
-                  href={selectedPreviewUrl}
+                  href={selectedPreviewUrl ?? undefined}
                   target="_blank"
-                  rel="noreferrer"
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  rel="noopener noreferrer"
+                  className="truncate text-xs text-muted-foreground"
                 >
-                  <ExternalLink className="size-4" />
-                  <span>Open</span>
+                  {selectedPreviewUrl ?? 'No preview URL available'}
                 </a>
-              ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" disabled={isInstalling}>
+                  {isInstalling ? (
+                    <LoadingGlyph label="Adding skill" />
+                  ) : (
+                    <PackagePlus className="size-4" />
+                  )}
+                  <AnimatedText className="text-left">
+                    {isInstalling ? 'Adding' : 'Add'}
+                  </AnimatedText>
+                </Button>
+                <DialogClose>
+                  <Button size="icon-sm" variant="ghost" disabled={isInstalling}>
+                    {isInstalling ? (
+                      <LoadingGlyph label="Adding skill" />
+                    ) : (
+                      <XIcon className="size-4" />
+                    )}
+                  </Button>
+                </DialogClose>
+              </div>
             </div>
 
             <SkillSearchPreview
@@ -618,7 +473,7 @@ function SkillSearchPreview({
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <div className="border-b pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+    <div className="border-b pb-3 font-mono text-xs font-medium text-muted-foreground uppercase">
       {children}
     </div>
   );
@@ -645,7 +500,7 @@ function PreviewStat({
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="block break-all font-mono text-sm hover:underline"
+          className="block font-mono text-sm break-all hover:underline"
         >
           {value}
         </a>
