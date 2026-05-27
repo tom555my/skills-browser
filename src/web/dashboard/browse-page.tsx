@@ -48,8 +48,6 @@ import { Spinner, PageLoadingState, StatusBanner } from './components';
 import { useDashboardActions, useDashboardData } from './data';
 import { InstallSkillDialog } from './install-skill-dialog';
 import { useSkillActions } from './skill-actions';
-import { showErrorToast, showSuccessToast } from './toasts';
-import { confirm } from './confirm';
 import type { BrowserSkill, ScopeFilter } from './types';
 import { createCommandFailureMessage, getErrorMessage, scopeLabel } from './utils';
 
@@ -134,19 +132,13 @@ export function BrowsePage() {
       const outcome = await removeSkill(skill, { applyPayloadDelayMs: 500 });
 
       if (outcome.command.ok) {
-        showSuccessToast(
-          'Skill removed',
-          `${skill.name} was removed from ${scopeLabel(skill.scope)}.`
-        );
         return { ok: true };
       }
 
       const message = createCommandFailureMessage(outcome.command);
-      showErrorToast('Remove failed', message);
       return { ok: false, errorMessage: message };
     } catch (error) {
       const message = getErrorMessage(error);
-      showErrorToast('Remove request failed', message);
       return { ok: false, errorMessage: message };
     }
   };
@@ -156,19 +148,13 @@ export function BrowsePage() {
       const outcome = await updateSkill(skill);
 
       if (outcome.command.ok) {
-        showSuccessToast(
-          'Skill updated',
-          `${skill.name} was updated in ${scopeLabel(skill.scope)}.`
-        );
         return { ok: true };
       }
 
       const message = createCommandFailureMessage(outcome.command);
-      showErrorToast('Update failed', message);
       return { ok: false, errorMessage: message };
     } catch (error) {
       const message = getErrorMessage(error);
-      showErrorToast('Update request failed', message);
       return { ok: false, errorMessage: message };
     }
   };
@@ -311,9 +297,11 @@ export function BrowsePage() {
                         idleIcon={<Trash2 className="size-4" />}
                         loadingLabel={`Removing ${skill.name}`}
                         onPendingChange={setPendingActionKey}
-                        onBeforeAction={() =>
-                          confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`)
-                        }
+                        confirmation={{
+                          title: 'Remove skill?',
+                          description: `Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`,
+                          actionLabel: 'Remove',
+                        }}
                         onAction={() => handleRemoveSkill(skill)}
                         tooltip="Remove"
                         variant="ghost"
@@ -371,27 +359,33 @@ type SkillCardActionResult = {
   errorMessage?: string;
 };
 
+type SkillCardActionConfirmation = {
+  title: string;
+  description: string;
+  actionLabel: string;
+};
+
 function SkillCardActionButton({
   actionKey,
   ariaLabel,
+  confirmation,
   disabled,
   errorTitle,
   idleIcon,
   loadingLabel,
   onAction,
-  onBeforeAction,
   onPendingChange,
   tooltip,
   variant = 'ghost',
 }: {
   actionKey: string;
   ariaLabel: string;
+  confirmation?: SkillCardActionConfirmation;
   disabled: boolean;
   errorTitle: string;
   idleIcon: ReactNode;
   loadingLabel: string;
   onAction: () => Promise<SkillCardActionResult>;
-  onBeforeAction?: () => Promise<boolean>;
   onPendingChange: (actionKey: string | null) => void;
   tooltip: string;
   variant?: React.ComponentProps<typeof Button>['variant'];
@@ -399,6 +393,7 @@ function SkillCardActionButton({
   const [status, setStatus] = useState<SkillCardActionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [popoverMode, setPopoverMode] = useState<'confirmation' | 'error' | null>(null);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -418,20 +413,14 @@ function SkillCardActionButton({
       setStatus('idle');
       setErrorMessage(null);
       setIsPopoverOpen(false);
+      setPopoverMode(null);
       timerRef.current = null;
     }, delay);
   };
 
-  const handleClick = async () => {
+  const runAction = async () => {
     if (disabled || status === 'loading') {
       return;
-    }
-
-    if (onBeforeAction) {
-      const shouldContinue = await onBeforeAction();
-      if (!shouldContinue) {
-        return;
-      }
     }
 
     if (timerRef.current !== null) {
@@ -442,6 +431,7 @@ function SkillCardActionButton({
     setStatus('loading');
     setErrorMessage(null);
     setIsPopoverOpen(false);
+    setPopoverMode(null);
     onPendingChange(actionKey);
 
     try {
@@ -455,11 +445,58 @@ function SkillCardActionButton({
 
       setStatus('error');
       setErrorMessage(result.errorMessage ?? errorTitle);
+      setPopoverMode('error');
       setIsPopoverOpen(true);
       scheduleReset(3000);
     } finally {
       onPendingChange(null);
     }
+  };
+
+  const handleClick = () => {
+    if (disabled || status === 'loading') {
+      return;
+    }
+
+    if (!confirmation) {
+      void runAction();
+      return;
+    }
+
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    setStatus('idle');
+    setErrorMessage(null);
+    setPopoverMode('confirmation');
+    setIsPopoverOpen(true);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    if (status === 'loading') {
+      return;
+    }
+
+    if (open) {
+      if (status === 'error') {
+        setPopoverMode('error');
+        setIsPopoverOpen(true);
+        return;
+      }
+
+      if (confirmation) {
+        setStatus('idle');
+        setErrorMessage(null);
+        setPopoverMode('confirmation');
+        setIsPopoverOpen(true);
+      }
+      return;
+    }
+
+    setIsPopoverOpen(false);
+    setPopoverMode(null);
   };
 
   const icon = (() => {
@@ -480,10 +517,7 @@ function SkillCardActionButton({
 
   return (
     <Tooltip>
-      <Popover
-        open={isPopoverOpen}
-        onOpenChange={(open) => setIsPopoverOpen(status === 'error' ? open : false)}
-      >
+      <Popover open={isPopoverOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger
           render={
             <TooltipTrigger
@@ -494,7 +528,7 @@ function SkillCardActionButton({
                   disabled={disabled || status === 'loading'}
                   aria-label={ariaLabel}
                   aria-invalid={status === 'error' || undefined}
-                  onClick={() => void handleClick()}
+                  onClick={handleClick}
                 >
                   {icon}
                 </Button>
@@ -503,13 +537,32 @@ function SkillCardActionButton({
           }
         />
         <PopoverContent side="bottom" align="end" className="w-80">
-          <PopoverHeader>
-            <PopoverTitle className="flex items-center gap-2 text-destructive">
-              <CircleAlert className="size-4" />
-              {errorTitle}
-            </PopoverTitle>
-            <PopoverDescription className="break-words">{errorMessage}</PopoverDescription>
-          </PopoverHeader>
+          {popoverMode === 'confirmation' && confirmation ? (
+            <>
+              <PopoverHeader>
+                <PopoverTitle>{confirmation.title}</PopoverTitle>
+                <PopoverDescription className="break-words">
+                  {confirmation.description}
+                </PopoverDescription>
+              </PopoverHeader>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => handleOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => void runAction()}>
+                  {confirmation.actionLabel}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <PopoverHeader>
+              <PopoverTitle className="flex items-center gap-2 text-destructive">
+                <CircleAlert className="size-4" />
+                {errorTitle}
+              </PopoverTitle>
+              <PopoverDescription className="break-words">{errorMessage}</PopoverDescription>
+            </PopoverHeader>
+          )}
         </PopoverContent>
       </Popover>
       <TooltipContent>{tooltip}</TooltipContent>
