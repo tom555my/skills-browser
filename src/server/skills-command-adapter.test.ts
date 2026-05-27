@@ -6,7 +6,7 @@ import { createSkillsCommandAdapter } from './skills-command-adapter';
 const createResult = (args: readonly string[]): SkillsCommandResult => {
   return {
     ok: true,
-    command: ['npx', 'skills', ...args],
+    command: ['skills', ...args],
     stdout: '',
     stderr: '',
     exitCode: 0,

@@ -1,5 +1,6 @@
 import type { SkillScope } from '../features/skills/types';
 import type { SkillsCommandResult } from '../features/skills/state';
+import { getSkillsCliPath } from './embedded-skills';
 
 export type { SkillScope } from '../features/skills/types';
 export type { SkillsCommandResult } from '../features/skills/state';
@@ -67,11 +68,12 @@ const appendMultiValueFlag = (
 };
 
 const runSkillsCommand: SkillsCommandRunner = async (args) => {
-  const process = await Bun.$`npx skills ${args}`.quiet().nothrow();
+  const cliPath = await getSkillsCliPath();
+  const process = await Bun.$`bun ${cliPath} ${args}`.quiet().nothrow();
 
   return {
     ok: process.exitCode === 0,
-    command: ['npx', 'skills', ...args],
+    command: ['skills', ...args],
     stdout: process.stdout.toString(),
     stderr: process.stderr.toString(),
     exitCode: process.exitCode,

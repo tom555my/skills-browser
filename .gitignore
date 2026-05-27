@@ -19,6 +19,9 @@ coverage
 # Vercel
 .vercel
 
+# Generated
+src/server/.generated
+
 # Build Outputs
 dist
 .output
