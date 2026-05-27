@@ -6,7 +6,6 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 
-import index from './web/index.html';
 import { honoApp } from './server/hono-app';
 
 type ParsedOptions = {
@@ -47,6 +46,7 @@ export async function main() {
   const launchCwd = getLaunchDirectory();
   process.env.SKILLS_BROWSER_LAUNCH_CWD = launchCwd;
   setApplicationWorkingDirectory();
+  const { default: index } = await import('./web/index.html');
 
   const server = Bun.serve({
     hostname: options.host,
