@@ -32,6 +32,11 @@ dist
 # Debug
 npm-debug.log*
 
+# Personal tooling
+.agents/
+.codex/
+setup.sh
+
 # Misc
 .DS_Store
 *.pem

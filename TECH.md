@@ -2,7 +2,7 @@
 
 ## Overview
 
-Skills Browser is now a single-package Bun application.
+Skills Browser is a single-package Bun application.
 
 - One entrypoint: `src/cli.ts`
 - One runtime process: Bun HTTP server + Hono API

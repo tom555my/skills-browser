@@ -9,17 +9,19 @@
 
 ```bash
 bun install          # setup; Bun linker is isolated in bunfig.toml
-bun run dev          # NODE_ENV=development bun run src/cli.ts start, default localhost:1996
-bun run start        # NODE_ENV=production bun run src/cli.ts start
-bun run build        # bun build --compile ./src/cli.ts --outfile ./dist/skills-browser
+bun run dev          # embed:skills + portless run --name sb, default localhost:1996
+bun run start        # embed:skills + NODE_ENV=production bun run src/cli.ts start
+bun run build        # embed:skills + bun build --compile, outputs ./dist/skills-browser
 bun run lint         # oxlint src
-bun run typecheck    # bun run embed:skills && tsgo --noEmit
+bun run typecheck    # embed:skills + tsgo --noEmit
 bun run test         # bun test
-bun run format       # oxfmt "src/**/*.{ts,tsx}"
+bun run format       # oxfmt (checks src/**/*.{ts,tsx})
 ```
 
 - Run a focused test with `bun test src/server/<name>.test.ts`.
-- Before committing, run `bun run lint`, then `bun run typecheck`, then `bun run test`; there are no GitHub Actions or repo hooks to catch misses.
+- Before committing: `bun run lint` → `bun run typecheck` → `bun run test`.
+- Lefthook enforces pre-commit (lint, format, typecheck) and pre-push (test).
+- GitHub Actions CI runs lint → typecheck → test on push/PR to main.
 - The compiled binary runs as `./dist/skills-browser start`; CLI options are `--host <host>`, `--port <number>`, and `--auto`.
 
 ## Architecture
@@ -31,6 +33,11 @@ bun run format       # oxfmt "src/**/*.{ts,tsx}"
 - `src/features/skills/` contains shared types, schemas, and state shapes used by both server and web.
 - `src/web/` is a client-rendered React 19 SPA. HTML entry is `src/web/index.html`; JS entry is `src/web/main.tsx`.
 - TanStack Router routes are declared manually in `src/web/router.tsx`; there is no generated route tree or SSR.
+
+## Generated Files
+
+- `scripts/embed-skills.ts` bundles the `skills` and `yaml` packages into `src/server/.generated/skills-bundle.ts` (auto-generated, do not edit).
+- `embed:skills` runs before dev, start, build, typecheck, and prepack.
 
 ## Styling And UI
 
