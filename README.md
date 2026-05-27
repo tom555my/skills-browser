@@ -5,17 +5,21 @@ through the upstream [`skills`](https://github.com/vercel-labs/skills) CLI.
 
 Skills Browser gives you a visual dashboard over your installed skills — see
 what's installed, discover new skills from [skills.sh](https://skills.sh),
-install with one click, and keep everything up to date. It wraps `npx skills`
-so that the CLI remains the source of truth.
+preview catalog details, install with one click, and keep everything up to date.
+It wraps the upstream `skills` CLI so that `npx skills` remains the source of
+truth for installed state.
 
 ## Features
 
 - **Dashboard** — view all installed skills grouped by agent, with status indicators
+- **Scope filters** — switch between all, project, and global installations
 - **Catalog search** — search the skills.sh catalog and preview skill details before installing
-- **One-click install** — install skills from the catalog with a single click
-- **Updates** — see which installed skills have updates available and apply them
+- **One-click install** — install catalog or direct-source skills into project or global scope
+- **Installed skill details** — inspect metadata and rendered `SKILL.md` instructions
+- **Updates** — update individual managed skills
 - **Remove** — remove skills from your agents
-- **Dark and light mode** — system-aware with persisted preference
+- **Resilient refresh** — preserve the last successful dashboard state when a refresh fails
+- **Dark and light mode** — persisted preference, with dark mode as the default
 - **Single binary** — compile to a standalone executable with `bun build --compile`
 
 ## Usage
@@ -35,6 +39,8 @@ npx skills-browser start --host localhost --port 1996 --auto
 ```
 
 `--auto` opens the local URL in your browser after the server starts.
+`HOST` and `PORT` environment variables can set the defaults when flags are not
+provided.
 
 ## Development
 
@@ -44,6 +50,10 @@ bun run dev
 ```
 
 The dev server starts at `http://localhost:1996`.
+
+`bun run dev` embeds the upstream `skills` CLI bundle, builds Tailwind CSS, and
+runs the server through `portless run --name sb` while the CSS watcher keeps
+`src/web/.generated/globals.css` up to date.
 
 ### Before committing
 
@@ -74,10 +84,11 @@ Run it:
 ## Architecture
 
 - **Runtime:** Bun HTTP server + Hono API (`src/cli.ts`)
-- **API:** Hono routes under `/api/*` (`src/server/hono-app.ts`)
+- **API:** Hono routes for dashboard, install/remove/update, search, catalog details, and installed `SKILL.md` reads (`src/server/hono-app.ts`)
 - **Client:** React 19 SPA with TanStack Router (`src/web/`)
 - **Shared:** Types and schemas (`src/features/skills/`)
-- **Build:** Single binary via `bun build --compile`
+- **Styling:** Tailwind v4 CSS generated from `src/web/styles/globals.css`
+- **Build:** Embedded `skills` bundle, generated CSS, and single binary via `bun build --compile`
 
 See [TECH.md](TECH.md) for details.
 
