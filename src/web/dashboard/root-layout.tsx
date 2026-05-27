@@ -3,9 +3,9 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import { parseAsStringEnum, useQueryState } from 'nuqs';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Menu, Moon, Package, PackagePlus, RefreshCw, Sun, X } from 'lucide-react';
-import { Toaster } from 'sileo';
 
 import { Button, buttonVariants } from '../components/ui/button';
+import { Toaster } from '../components/ui/sonner';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
 import { AnimatedText, Spinner } from './components';
 import { DashboardDataProvider, useDashboardActions } from './data';
@@ -21,12 +21,7 @@ export function RootLayout() {
 
   return (
     <DashboardDataProvider>
-      <Toaster
-        position="top-left"
-        offset={{ top: 64, left: 16 }}
-        theme="light"
-        options={{ duration: 4200, roundness: 8 }}
-      />
+      <Toaster position="top-left" offset={{ top: 64, left: 16 }} theme={theme} duration={4200} />
       <div className="min-h-svh bg-background">
         <NuqsAdapter>
           <TopBar theme={theme} onThemeChange={setTheme} />

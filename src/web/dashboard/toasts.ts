@@ -1,15 +1,13 @@
-import { sileo } from 'sileo';
+import { toast } from 'sonner';
 
 export const showSuccessToast = (title: string, description?: string) => {
-  sileo.success({
-    title,
+  toast.success(title, {
     description,
   });
 };
 
 export const showErrorToast = (title: string, description?: string) => {
-  sileo.error({
-    title,
+  toast.error(title, {
     description,
     duration: 7000,
   });
