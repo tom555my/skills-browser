@@ -82,9 +82,6 @@ jobs:
           - os: ubuntu-latest
             target: linux-x64
             artifact: skills-browser-linux-x64
-          - os: macos-13
-            target: macos-x64
-            artifact: skills-browser-macos-x64
           - os: macos-latest
             target: macos-arm64
             artifact: skills-browser-macos-arm64
