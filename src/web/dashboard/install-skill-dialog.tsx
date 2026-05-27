@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { BookOpenText, Eye, PackagePlus, Plus, X, XIcon } from 'lucide-react';
+import { BookOpenText, Eye, X, XIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQueryState } from 'nuqs';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -16,21 +15,10 @@ import type {
   SearchResultSkill,
   SkillDetailsState,
 } from '../../features/skills/state';
-import type { SkillScope } from '../../features/skills/types';
-import { fetchSkillDetails, installDashboardSkills, searchSkills } from '../api';
+import { fetchSkillDetails, searchSkills } from '../api';
+import { AddSkillPopover } from '../components/add-skill-popover';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import {
-  Combobox,
-  ComboboxChip,
-  ComboboxChips,
-  ComboboxChipsInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxGroup,
-  ComboboxItem,
-  ComboboxList,
-} from '../components/ui/combobox';
 import {
   Command,
   CommandGroup,
@@ -46,19 +34,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '../components/ui/popover';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
-import { AnimatedText, Spinner, LoadingIndicator, StatusBanner } from './components';
-import { showErrorToast, showSuccessToast } from './toasts';
+import { Spinner, LoadingIndicator, StatusBanner } from './components';
 import type { SearchStatus } from './types';
-import { createCommandFailureMessage, getErrorMessage } from './utils';
+import { getErrorMessage } from './utils';
 
 type InstallSkillDialogProps = {
   open: boolean;
@@ -83,11 +63,6 @@ export function InstallSkillDialog({
   const installSearchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useQueryState('q');
   const [previewId, setPreviewId] = useQueryState('preview');
-
-  const [showInstallForm, setShowInstallForm] = useState(false);
-  const [formStep, setFormStep] = useState<'scope' | 'agents'>('scope');
-  const [formScope, setFormScope] = useState<SkillScope>('project');
-  const [formAgents, setFormAgents] = useState<string[]>([]);
 
   const hasSearchResultContainer = searchStatus !== 'idle';
   const selectedPreview = useMemo(() => {
@@ -180,51 +155,6 @@ export function InstallSkillDialog({
   const handlePreviewSearchResult = (result: SearchResultSkill) => {
     void setPreviewId(result.id);
     setInstallSource(result.source);
-  };
-
-  const handleOpenInstallForm = useCallback(() => {
-    setFormStep('scope');
-    setFormScope('project');
-    setFormAgents(['universal']);
-    setShowInstallForm(true);
-  }, []);
-
-  const handleValueChange = useCallback((value: string | string[]) => {
-    setFormAgents(Array.isArray(value) ? value : [value]);
-  }, []);
-
-  const handleInstall = async () => {
-    if (!installSource) {
-      return;
-    }
-
-    setShowInstallForm(false);
-    setIsInstalling(true);
-
-    try {
-      const outcome = await installDashboardSkills({
-        source: installSource,
-        scope: formScope,
-        agents: [...new Set([...formAgents, 'universal'])],
-        previousState: payload?.installedState,
-      });
-
-      if (outcome.command.ok) {
-        showSuccessToast(
-          'Skill installed',
-          `${installSource} was installed in ${formScope} scope.`
-        );
-        void onInstalled();
-        onOpenChange(false);
-        return;
-      }
-
-      showErrorToast('Install failed', createCommandFailureMessage(outcome.command));
-    } catch (error) {
-      showErrorToast('Install request failed', getErrorMessage(error));
-    } finally {
-      setIsInstalling(false);
-    }
   };
 
   return (
@@ -375,38 +305,15 @@ export function InstallSkillDialog({
                 </a>
               </div>
               <div className="flex items-center gap-2">
-                {isInstalling ? (
-                  <Button size="sm" disabled>
-                    <Spinner label="Adding skill" />
-                    <AnimatedText className="text-left">Adding</AnimatedText>
-                  </Button>
-                ) : (
-                  <Popover open={showInstallForm} onOpenChange={setShowInstallForm}>
-                    <PopoverTrigger onClick={handleOpenInstallForm}>
-                      <Button size="sm">
-                        <PackagePlus className="size-4" />
-                        <AnimatedText className="text-left">Add</AnimatedText>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent side="bottom" align="end" className="w-80">
-                      {formStep === 'scope' ? (
-                        <ScopeStep
-                          launchDirectory={payload?.launchDirectory}
-                          selectedScope={formScope}
-                          onSelectScope={setFormScope}
-                          onContinue={() => setFormStep('agents')}
-                        />
-                      ) : (
-                        <AgentsStep
-                          selectedAgents={formAgents}
-                          onValueChange={handleValueChange}
-                          onBack={() => setFormStep('scope')}
-                          onInstall={handleInstall}
-                        />
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                )}
+                <AddSkillPopover
+                  installSource={installSource}
+                  launchDirectory={payload?.launchDirectory}
+                  previousState={payload?.installedState}
+                  isInstalling={isInstalling}
+                  onInstallingChange={setIsInstalling}
+                  onInstalled={onInstalled}
+                  onDialogOpenChange={onOpenChange}
+                />
                 <DialogClose>
                   <Button size="icon-sm" variant="ghost" disabled={isInstalling}>
                     {isInstalling ? <Spinner label="Adding skill" /> : <XIcon className="size-4" />}
@@ -612,162 +519,6 @@ function PreviewStat({
         <p className="font-mono text-sm">{value}</p>
       )}
     </section>
-  );
-}
-
-function ScopeStep({
-  launchDirectory,
-  selectedScope,
-  onSelectScope,
-  onContinue,
-}: {
-  launchDirectory: string | undefined;
-  selectedScope: SkillScope;
-  onSelectScope: (scope: SkillScope) => void;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <PopoverHeader>
-        <PopoverTitle className="text-xs text-muted-foreground uppercase">Step 1 of 2</PopoverTitle>
-        <p className="text-sm font-medium">Where to install?</p>
-      </PopoverHeader>
-
-      <div className="space-y-1.5">
-        <button
-          type="button"
-          data-selected={selectedScope === 'project'}
-          className={cn(
-            'flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
-            selectedScope === 'project'
-              ? 'border-accent bg-accent/50'
-              : 'border-border hover:bg-muted'
-          )}
-          onClick={() => onSelectScope('project')}
-        >
-          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border">
-            {selectedScope === 'project' ? (
-              <span className="size-2 rounded-full bg-foreground" />
-            ) : null}
-          </span>
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm font-medium">Project</span>
-            <span className="block truncate font-mono text-xs text-muted-foreground">
-              {launchDirectory ?? 'Current directory'}
-            </span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          data-selected={selectedScope === 'global'}
-          className={cn(
-            'flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
-            selectedScope === 'global'
-              ? 'border-accent bg-accent/50'
-              : 'border-border hover:bg-muted'
-          )}
-          onClick={() => onSelectScope('global')}
-        >
-          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border">
-            {selectedScope === 'global' ? (
-              <span className="size-2 rounded-full bg-foreground" />
-            ) : null}
-          </span>
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm font-medium">Global</span>
-            <span className="block text-xs text-muted-foreground">Available for all projects</span>
-          </span>
-        </button>
-      </div>
-
-      <Button size="sm" className="w-full" onClick={onContinue}>
-        Continue
-        <Plus className="size-3.5" />
-      </Button>
-    </div>
-  );
-}
-
-const COMMON_AGENTS = [
-  'universal',
-  'aider-desk',
-  'amp',
-  'antigravity',
-  'augment',
-  'bob',
-  'claude',
-  'claude-code',
-  'cline',
-  'codeartsdoer',
-  'codebuddy',
-  'codemaker',
-  'codex',
-  'copilot',
-  'cursor',
-  'deep-agents',
-  'dexto',
-  'firebender',
-  'gemini',
-  'kimi-code-cli',
-  'openclaw',
-  'opencode',
-  'warp',
-];
-
-function AgentsStep({
-  selectedAgents,
-  onValueChange,
-  onBack,
-  onInstall,
-}: {
-  selectedAgents: string[];
-  onValueChange: (value: string | string[]) => void;
-  onBack: () => void;
-  onInstall: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <PopoverHeader>
-        <PopoverTitle className="text-xs text-muted-foreground uppercase">Step 2 of 2</PopoverTitle>
-        <p className="text-sm font-medium">Assign to agents</p>
-      </PopoverHeader>
-
-      <Combobox multiple value={selectedAgents} onValueChange={onValueChange}>
-        <ComboboxChips>
-          {selectedAgents.map((agent) => (
-            <ComboboxChip key={agent}>{agent}</ComboboxChip>
-          ))}
-          <ComboboxChipsInput placeholder="Search agents..." className="text-xs" />
-        </ComboboxChips>
-        <ComboboxContent>
-          <ComboboxList>
-            <ComboboxGroup>
-              {COMMON_AGENTS.map((agent) => (
-                <ComboboxItem key={agent} value={agent}>
-                  {agent}
-                </ComboboxItem>
-              ))}
-            </ComboboxGroup>
-            <ComboboxEmpty>No matching agents.</ComboboxEmpty>
-          </ComboboxList>
-        </ComboboxContent>
-      </Combobox>
-
-      <p className="text-xs text-muted-foreground">
-        Universal (.agents/skills) is always included.
-      </p>
-
-      <div className="flex items-center gap-1.5">
-        <Button size="sm" variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button size="sm" className="flex-1" onClick={onInstall}>
-          <PackagePlus className="size-3.5" />
-          Install
-        </Button>
-      </div>
-    </div>
   );
 }
 
