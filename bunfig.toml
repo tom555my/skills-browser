@@ -1,4 +1,2 @@
 [install]
 linker = "isolated"
-[serve.static]
-plugins = ["bun-plugin-tailwind"]

@@ -21,6 +21,7 @@ coverage
 
 # Generated
 src/server/.generated
+src/web/.generated
 
 # Build Outputs
 dist
