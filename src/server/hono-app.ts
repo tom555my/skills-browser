@@ -463,6 +463,24 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       },
     });
 
+    if (request.names) {
+      const installedState = await loadInstalledState();
+      const scopeSkills = installedState[request.scope].skills;
+      const unmanagedNames = request.names.filter((name) => {
+        const skill = scopeSkills.find((candidate) => candidate.name === name);
+        return !skill?.managed;
+      });
+
+      if (unmanagedNames.length > 0) {
+        return context.json(
+          {
+            error: `Cannot update local or untracked skills: ${unmanagedNames.join(', ')}.`,
+          },
+          400
+        );
+      }
+    }
+
     const command = await commandAdapter.updateSkills({
       scope: request.scope,
       names: request.names,

@@ -28,6 +28,7 @@ const createInstalledSkill = (scope: 'project' | 'global', name: string): Instal
   return {
     id: `${scope}:${name}:${name}`,
     name,
+    managed: true,
     scope,
     agents: [],
   };
@@ -58,6 +59,12 @@ describe('installed skills state loading', () => {
 
     const result = await loadProjectInstalledSkills({
       adapter,
+      loadLockEntries: async () => ({
+        'do-it': {
+          source: 'owner/repo',
+          sourceType: 'github',
+        },
+      }),
       now: () => new Date(FIXED_NOW),
     });
 
@@ -70,12 +77,42 @@ describe('installed skills state loading', () => {
       {
         id: 'project:do-it:/tmp/do-it',
         name: 'do-it',
+        managed: true,
         path: '/tmp/do-it',
         scope: 'project',
         agents: ['Codex'],
         source: 'owner/repo',
         sourceType: 'github',
+        repository: 'owner/repo',
+        repositoryUrl: 'https://github.com/owner/repo',
         ref: 'main',
+      },
+    ]);
+  });
+
+  it('marks discovered skills without lock entries as local', async () => {
+    const adapter = {
+      listSkills: async () => {
+        return createResult(['list', '--json'], {
+          stdout: JSON.stringify([{ name: 'do-it', path: '/tmp/do-it', agents: ['Codex'] }]),
+        });
+      },
+    };
+
+    const result = await loadProjectInstalledSkills({
+      adapter,
+      loadLockEntries: async () => ({}),
+      now: () => new Date(FIXED_NOW),
+    });
+
+    expect(result.skills).toEqual([
+      {
+        id: 'project:do-it:/tmp/do-it',
+        name: 'do-it',
+        managed: false,
+        path: '/tmp/do-it',
+        scope: 'project',
+        agents: ['Codex'],
       },
     ]);
   });
@@ -92,7 +129,11 @@ describe('installed skills state loading', () => {
       },
     };
 
-    const result = await loadGlobalInstalledSkills({ adapter, now: () => new Date(FIXED_NOW) });
+    const result = await loadGlobalInstalledSkills({
+      adapter,
+      loadLockEntries: async () => ({}),
+      now: () => new Date(FIXED_NOW),
+    });
 
     expect(calls).toEqual([{ scope: 'global', json: true }]);
     expect(result.scope).toBe('global');
@@ -100,6 +141,7 @@ describe('installed skills state loading', () => {
       {
         id: 'global:adapt:0',
         name: 'adapt',
+        managed: false,
         scope: 'global',
         agents: ['Claude Code'],
       },
@@ -147,7 +189,11 @@ describe('installed skills state loading', () => {
       },
     };
 
-    const result = await loadGlobalInstalledSkills({ adapter, now: () => new Date(FIXED_NOW) });
+    const result = await loadGlobalInstalledSkills({
+      adapter,
+      loadLockEntries: async () => ({}),
+      now: () => new Date(FIXED_NOW),
+    });
 
     expect(result.skills).toEqual([]);
     expect(result.stale).toBe(false);
@@ -177,6 +223,7 @@ describe('installed skills state loading', () => {
 
     const result = await loadInstalledSkillsState({
       adapter,
+      loadLockEntries: async () => ({}),
       previousState: {
         project: {
           scope: 'project',
@@ -205,6 +252,7 @@ describe('installed skills state loading', () => {
       {
         id: 'project:do-it:0',
         name: 'do-it',
+        managed: false,
         scope: 'project',
         agents: ['Codex'],
       },

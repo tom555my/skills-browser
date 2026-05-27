@@ -80,7 +80,7 @@ export function SkillDetailsPage() {
   };
 
   const handleUpdateSkill = async () => {
-    if (!skill || isRemoving || isUpdating) {
+    if (!skill || !skill.managed || isRemoving || isUpdating) {
       return;
     }
 
@@ -148,7 +148,25 @@ export function SkillDetailsPage() {
             </div>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{skill.description}</p>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{skill.primarySource}</span>
+              {skill.managed ? (
+                <span>
+                  Repository:{' '}
+                  {skill.repositoryUrl ? (
+                    <a
+                      href={skill.repositoryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-foreground underline-offset-4 hover:underline"
+                    >
+                      {skill.repository ?? skill.sourceUrl ?? skill.source ?? 'Unknown'}
+                    </a>
+                  ) : (
+                    <span>{skill.repository ?? skill.sourceUrl ?? skill.source ?? 'Unknown'}</span>
+                  )}
+                </span>
+              ) : (
+                <span>Local skill</span>
+              )}
               <span className="text-border">•</span>
               <span>
                 {skill.activityAt
@@ -159,21 +177,23 @@ export function SkillDetailsPage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isUpdating || isRemoving}
-              onClick={() => void handleUpdateSkill()}
-            >
-              {isUpdating ? (
-                <Spinner label={`Updating ${skill.name}`} />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              <AnimatedText className="text-left">
-                {isUpdating ? 'Updating' : 'Update'}
-              </AnimatedText>
-            </Button>
+            {skill.managed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isUpdating || isRemoving}
+                onClick={() => void handleUpdateSkill()}
+              >
+                {isUpdating ? (
+                  <Spinner label={`Updating ${skill.name}`} />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+                <AnimatedText className="text-left">
+                  {isUpdating ? 'Updating' : 'Update'}
+                </AnimatedText>
+              </Button>
+            ) : null}
             <Button
               variant="destructive"
               size="sm"
