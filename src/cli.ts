@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { createServer as createNetServer } from 'node:net';
 import * as p from '@clack/prompts';
 
