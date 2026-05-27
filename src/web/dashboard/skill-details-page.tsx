@@ -4,14 +4,15 @@ import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { ArrowLeft, BookOpenText, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Badge } from '../components/ui/badge';
-import { Button, buttonVariants } from '../components/ui/button';
+import { buttonVariants } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { Skeleton } from '../components/ui/skeleton';
 import { fetchSkillReadme } from '../api';
 import { AgentBadge } from './agent-badge';
-import { AnimatedText, Spinner, PageLoadingState } from './components';
+import { PageLoadingState } from './components';
 import { useDashboardData } from './data';
+import { SkillActionButton } from './skill-action-button';
 import { useSkillActions } from './skill-actions';
 import {
   SkillMarkdown,
@@ -19,8 +20,7 @@ import {
   parseSkillFrontmatterAttributes,
   parseSkillMarkdownDocument,
 } from './skill-markdown';
-import { showErrorToast, showSuccessToast } from './toasts';
-import { confirm } from './confirm';
+import { showSuccessToast } from './toasts';
 import { createCommandFailureMessage, formatDateTime, getErrorMessage, scopeLabel } from './utils';
 
 export function SkillDetailsPage() {
@@ -29,8 +29,7 @@ export function SkillDetailsPage() {
   const { isInitialLoading, payload, skills, getSkillById } = useDashboardData();
   const { removeSkill, updateSkill } = useSkillActions();
   const skill = getSkillById(skillId);
-  const [isRemoving, setIsRemoving] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const {
     data: skillReadmePayload,
     error: skillReadmeError,
@@ -48,16 +47,9 @@ export function SkillDetailsPage() {
   });
 
   const handleRemoveSkill = async () => {
-    if (!skill || isRemoving || isUpdating) {
-      return;
+    if (!skill || pendingActionKey !== null) {
+      return { ok: false };
     }
-
-    const confirmed = await confirm(`Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    setIsRemoving(true);
 
     try {
       const outcome = await removeSkill(skill);
@@ -67,24 +59,24 @@ export function SkillDetailsPage() {
           'Skill removed',
           `${skill.name} was removed from ${scopeLabel(skill.scope)}.`
         );
-        await navigate({ to: '/' });
-        return;
+        window.setTimeout(() => {
+          void navigate({ to: '/' });
+        }, 500);
+        return { ok: true };
       }
 
-      showErrorToast('Remove failed', createCommandFailureMessage(outcome.command));
+      const message = createCommandFailureMessage(outcome.command);
+      return { ok: false, errorMessage: message };
     } catch (error) {
-      showErrorToast('Remove request failed', getErrorMessage(error));
-    } finally {
-      setIsRemoving(false);
+      const message = getErrorMessage(error);
+      return { ok: false, errorMessage: message };
     }
   };
 
   const handleUpdateSkill = async () => {
-    if (!skill || isRemoving || isUpdating) {
-      return;
+    if (!skill || pendingActionKey !== null) {
+      return { ok: false };
     }
-
-    setIsUpdating(true);
 
     try {
       const outcome = await updateSkill(skill);
@@ -94,14 +86,14 @@ export function SkillDetailsPage() {
           'Skill updated',
           `${skill.name} was updated in ${scopeLabel(skill.scope)}.`
         );
-        return;
+        return { ok: true };
       }
 
-      showErrorToast('Update failed', createCommandFailureMessage(outcome.command));
+      const message = createCommandFailureMessage(outcome.command);
+      return { ok: false, errorMessage: message };
     } catch (error) {
-      showErrorToast('Update request failed', getErrorMessage(error));
-    } finally {
-      setIsUpdating(false);
+      const message = getErrorMessage(error);
+      return { ok: false, errorMessage: message };
     }
   };
 
@@ -158,37 +150,35 @@ export function SkillDetailsPage() {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isUpdating || isRemoving}
-              onClick={() => void handleUpdateSkill()}
-            >
-              {isUpdating ? (
-                <Spinner label={`Updating ${skill.name}`} />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              <AnimatedText className="text-left">
-                {isUpdating ? 'Updating' : 'Update'}
-              </AnimatedText>
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={isUpdating || isRemoving}
-              onClick={() => void handleRemoveSkill()}
-            >
-              {isRemoving ? (
-                <Spinner label={`Removing ${skill.name}`} />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-              <AnimatedText className="text-left">
-                {isRemoving ? 'Removing' : 'Remove'}
-              </AnimatedText>
-            </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <SkillActionButton
+              actionKey={`update:${skill.id}`}
+              ariaLabel={`Update ${skill.name}`}
+              disabled={pendingActionKey !== null}
+              errorTitle="Update failed"
+              idleIcon={<RefreshCw className="size-4" />}
+              loadingLabel={`Updating ${skill.name}`}
+              onPendingChange={setPendingActionKey}
+              onAction={handleUpdateSkill}
+              tooltip="Update"
+            />
+            <SkillActionButton
+              actionKey={`remove:${skill.id}`}
+              ariaLabel={`Remove ${skill.name}`}
+              disabled={pendingActionKey !== null}
+              errorTitle="Remove failed"
+              idleIcon={<Trash2 className="size-4" />}
+              loadingLabel={`Removing ${skill.name}`}
+              onPendingChange={setPendingActionKey}
+              confirmation={{
+                title: 'Remove skill?',
+                description: `Remove "${skill.name}" from ${scopeLabel(skill.scope)}?`,
+                actionLabel: 'Remove',
+              }}
+              onAction={handleRemoveSkill}
+              tooltip="Remove"
+              variant="ghost"
+            />
           </div>
         </div>
 
