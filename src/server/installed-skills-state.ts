@@ -1,3 +1,6 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import type { InstalledSkill, SkillScope } from '../features/skills/types';
 import type {
   InstalledSkillsScopeState,
@@ -14,14 +17,31 @@ import { createSkillsCommandAdapter, type SkillsCommandAdapter } from './skills-
 
 type SkillsListAdapter = Pick<SkillsCommandAdapter, 'listSkills'>;
 
+type SkillLockEntry = {
+  source?: string;
+  sourceUrl?: string;
+  sourceType?: string;
+  ref?: string;
+  skillPath?: string;
+  skillFolderHash?: string;
+  computedHash?: string;
+  pluginName?: string;
+  installedAt?: string;
+  updatedAt?: string;
+};
+
+type SkillLockEntries = Record<string, SkillLockEntry>;
+
 type LoadInstalledSkillsScopeOptions = {
   adapter?: SkillsListAdapter;
+  loadLockEntries?: (scope: SkillScope) => Promise<SkillLockEntries>;
   previousState?: InstalledSkillsScopeState;
   now?: () => Date;
 };
 
 type LoadInstalledSkillsStateOptions = {
   adapter?: SkillsListAdapter;
+  loadLockEntries?: (scope: SkillScope) => Promise<SkillLockEntries>;
   previousState?: InstalledSkillsState;
   now?: () => Date;
 };
@@ -51,6 +71,104 @@ const truncateOutput = (value: string): string => {
 
 const getScope = (value: unknown, fallbackScope: SkillScope): SkillScope => {
   return parseSkillScope(value) ?? fallbackScope;
+};
+
+const readJsonFile = async (path: string): Promise<unknown> => {
+  return JSON.parse(await Bun.file(path).text());
+};
+
+const normalizeLockEntries = (value: unknown): SkillLockEntries => {
+  const record = parseRecord(value);
+  const skills = parseRecord(record?.skills);
+  if (!record || !skills || typeof record.version !== 'number') {
+    return {};
+  }
+
+  const entries: SkillLockEntries = {};
+  for (const [name, rawEntry] of Object.entries(skills)) {
+    const entry = parseRecord(rawEntry);
+    if (!entry) {
+      continue;
+    }
+
+    entries[name] = {
+      source: parseTrimmedString(entry.source),
+      sourceUrl: parseTrimmedString(entry.sourceUrl),
+      sourceType: parseTrimmedString(entry.sourceType),
+      ref: parseTrimmedString(entry.ref),
+      skillPath: parseTrimmedString(entry.skillPath),
+      skillFolderHash: parseTrimmedString(entry.skillFolderHash),
+      computedHash: parseTrimmedString(entry.computedHash),
+      pluginName: parseTrimmedString(entry.pluginName),
+      installedAt: parseTrimmedString(entry.installedAt),
+      updatedAt: parseTrimmedString(entry.updatedAt),
+    };
+  }
+
+  return entries;
+};
+
+const getGlobalLockPath = (): string => {
+  const xdgStateHome = process.env.XDG_STATE_HOME?.trim();
+  if (xdgStateHome) {
+    return join(xdgStateHome, 'skills', '.skill-lock.json');
+  }
+
+  return join(homedir(), '.agents', '.skill-lock.json');
+};
+
+const getProjectLockPath = (): string => {
+  const launchCwd = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
+  return join(launchCwd && launchCwd.length > 0 ? launchCwd : process.cwd(), 'skills-lock.json');
+};
+
+const loadDefaultLockEntries = async (scope: SkillScope): Promise<SkillLockEntries> => {
+  const lockPath = scope === 'global' ? getGlobalLockPath() : getProjectLockPath();
+
+  try {
+    return normalizeLockEntries(await readJsonFile(lockPath));
+  } catch {
+    return {};
+  }
+};
+
+const getRepositoryFromSource = (
+  source: string | undefined,
+  sourceUrl: string | undefined
+): { repository?: string; repositoryUrl?: string } => {
+  const urlInput = sourceUrl ?? source;
+
+  if (urlInput) {
+    try {
+      const url = new URL(urlInput);
+      const host = url.hostname.toLowerCase();
+      const parts = url.pathname
+        .replace(/\.git$/, '')
+        .split('/')
+        .filter((part) => part.length > 0);
+
+      if ((host === 'github.com' || host === 'gitlab.com') && parts.length >= 2) {
+        const repository = `${parts[0]}/${parts[1]}`;
+        return {
+          repository,
+          repositoryUrl: `${url.protocol}//${url.hostname}/${repository}`,
+        };
+      }
+    } catch {
+      // Fall through to shorthand parsing.
+    }
+  }
+
+  const shorthand = source?.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:[@#].*)?$/);
+  if (!shorthand) {
+    return {};
+  }
+
+  const repository = `${shorthand[1]}/${shorthand[2]}`;
+  return {
+    repository,
+    repositoryUrl: `https://github.com/${repository}`,
+  };
 };
 
 const createInstalledSkillId = (input: {
@@ -105,6 +223,7 @@ const createJsonParseMessage = (input: {
 const normalizeInstalledSkills = (input: {
   scope: SkillScope;
   result: SkillsCommandResult;
+  lockEntries: SkillLockEntries;
 }): InstalledSkill[] => {
   let parsed: unknown;
   try {
@@ -140,20 +259,27 @@ const normalizeInstalledSkills = (input: {
 
     const scope = getScope(record.scope, input.scope);
     const path = parseTrimmedString(record.path);
-    const source = parseTrimmedString(record.source);
-    const sourceType = parseTrimmedString(record.sourceType);
-    const ref = parseTrimmedString(record.ref);
-    const installedAt = parseTrimmedString(record.installedAt);
-    const updatedAt = parseTrimmedString(record.updatedAt);
+    const lockEntry = input.lockEntries[name];
+    const source = lockEntry?.source ?? parseTrimmedString(record.source);
+    const sourceUrl = lockEntry?.sourceUrl ?? parseTrimmedString(record.sourceUrl);
+    const sourceType = lockEntry?.sourceType ?? parseTrimmedString(record.sourceType);
+    const ref = lockEntry?.ref ?? parseTrimmedString(record.ref);
+    const installedAt = lockEntry?.installedAt ?? parseTrimmedString(record.installedAt);
+    const updatedAt = lockEntry?.updatedAt ?? parseTrimmedString(record.updatedAt);
     const agents = parseStringArray(record.agents);
+    const repository = getRepositoryFromSource(source, sourceUrl);
 
     normalized.push({
       id: createInstalledSkillId({ scope, name, path, source, index }),
       name,
+      managed: Boolean(lockEntry),
       scope,
       path,
       source,
+      sourceUrl,
       sourceType,
+      repository: repository.repository,
+      repositoryUrl: repository.repositoryUrl,
       ref,
       agents,
       installedAt,
@@ -206,6 +332,7 @@ const loadInstalledSkillsForScope = async (
   const { adapter = defaultAdapter, previousState, now = () => new Date() } = options;
 
   const result = await adapter.listSkills({ scope, json: true });
+  const lockEntries = await (options.loadLockEntries ?? loadDefaultLockEntries)(scope);
 
   if (!result.ok) {
     return createFailedState({
@@ -217,7 +344,7 @@ const loadInstalledSkillsForScope = async (
   }
 
   try {
-    const skills = normalizeInstalledSkills({ scope, result });
+    const skills = normalizeInstalledSkills({ scope, result, lockEntries });
 
     return {
       scope,
@@ -258,11 +385,13 @@ export const loadInstalledSkillsState = async (
   const [project, global] = await Promise.all([
     loadProjectInstalledSkills({
       adapter,
+      loadLockEntries: options.loadLockEntries,
       previousState: previousState?.project,
       now,
     }),
     loadGlobalInstalledSkills({
       adapter,
+      loadLockEntries: options.loadLockEntries,
       previousState: previousState?.global,
       now,
     }),

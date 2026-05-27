@@ -17,7 +17,9 @@ export const buildSkills = (installedState: InstalledSkillsState): BrowserSkill[
   return merged
     .map((skill) => {
       const description = buildSkillDescription(skill);
-      const primarySource = skill.source ?? skill.path ?? 'Unknown source';
+      const primarySource = skill.managed
+        ? (skill.repository ?? skill.sourceUrl ?? skill.source ?? 'Unknown repository')
+        : (skill.path ?? skill.source ?? 'Unknown source');
       const activityAt = skill.updatedAt ?? skill.installedAt ?? null;
       const activityTimestamp = activityAt ? Date.parse(activityAt) : 0;
 
@@ -57,10 +59,14 @@ const buildSkillDescription = (skill: InstalledSkill): string => {
     fragments.push(`Source type: ${skill.sourceType}`);
   }
 
-  if (skill.path) {
-    fragments.push('Installed from local path');
+  if (!skill.managed) {
+    fragments.push('Local skill');
+  } else if (skill.repository) {
+    fragments.push(`Repository: ${skill.repository}`);
+  } else if (skill.path) {
+    fragments.push('Managed local source');
   } else if (skill.source) {
-    fragments.push('Installed from remote source');
+    fragments.push('Managed source');
   }
 
   if (skill.agents.length > 0) {

@@ -11,6 +11,7 @@ const createInstalledState = (): InstalledSkillsState => {
         {
           id: 'project:find-skills:/tmp/find-skills',
           name: 'find-skills',
+          managed: true,
           scope: 'project',
           agents: ['codex'],
           path: '/tmp/find-skills',

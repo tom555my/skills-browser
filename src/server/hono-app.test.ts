@@ -38,6 +38,18 @@ const createInstalledState = (): InstalledSkillsState => {
   };
 };
 
+const createInstalledStateWithSkills = (
+  scope: 'project' | 'global',
+  skills: InstalledSkillsState['project']['skills']
+): InstalledSkillsState => {
+  const state = createInstalledState();
+  state[scope] = {
+    ...state[scope],
+    skills,
+  };
+  return state;
+};
+
 describe('dashboard update route', () => {
   it('runs update with project scope and no names for update all', async () => {
     const calls: unknown[] = [];
@@ -78,6 +90,23 @@ describe('dashboard update route', () => {
           return createCommandResult(['update', 'adapt', 'do-it', '--global']);
         },
       },
+      loadInstalledState: async () =>
+        createInstalledStateWithSkills('global', [
+          {
+            id: 'global:adapt:0',
+            name: 'adapt',
+            managed: true,
+            scope: 'global',
+            agents: [],
+          },
+          {
+            id: 'global:do-it:1',
+            name: 'do-it',
+            managed: true,
+            scope: 'global',
+            agents: [],
+          },
+        ]),
     });
 
     const response = await app.request(
@@ -95,6 +124,48 @@ describe('dashboard update route', () => {
 
     expect(response.status).toBe(200);
     expect(calls).toEqual([{ scope: 'global', names: ['adapt', 'do-it'] }]);
+  });
+
+  it('rejects selected local skills before update execution', async () => {
+    const calls: unknown[] = [];
+    const app = createHonoApp({
+      updateAdapter: {
+        updateSkills: async (options = {}) => {
+          calls.push(options);
+          return createCommandResult(['update', 'do-it', '--project']);
+        },
+      },
+      loadInstalledState: async () =>
+        createInstalledStateWithSkills('project', [
+          {
+            id: 'project:do-it:0',
+            name: 'do-it',
+            managed: false,
+            scope: 'project',
+            agents: [],
+            path: '/tmp/do-it',
+          },
+        ]),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/dashboard/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scope: 'project',
+          names: ['do-it'],
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(calls).toEqual([]);
+    expect(await response.json()).toEqual({
+      error: 'Cannot update local or untracked skills: do-it.',
+    });
   });
 
   it('rejects invalid update payloads with bad scope or empty names', async () => {

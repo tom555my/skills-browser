@@ -1,7 +1,7 @@
 ## Product Context
 
 - Local web UI for developers managing AI agent skills from `skills.sh` through the upstream `skills` CLI.
-- Keep `npx skills` as the source of truth; do not read skill lockfiles or canonical skill directories directly for installed state.
+- Keep `npx skills` as the source of truth; do not read canonical skill directories directly for installed state.
 - Visual language is shadcn/ui-style developer tooling: neutral oklch palette, Inter Variable, generous whitespace, light and dark modes, no playful/consumer decoration.
 - Theme is controlled by the `skills-browser-theme` localStorage key and a `dark` class on `<html>`; dark is the default when no saved theme exists.
 

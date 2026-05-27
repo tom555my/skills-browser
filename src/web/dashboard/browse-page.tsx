@@ -295,13 +295,13 @@ export function BrowsePage() {
                       <SkillCardActionButton
                         actionKey={`update:${skill.id}`}
                         ariaLabel={`Update ${skill.name}`}
-                        disabled={pendingActionKey !== null}
+                        disabled={pendingActionKey !== null || !skill.managed}
                         errorTitle="Update failed"
                         idleIcon={<RefreshCw className="size-4" />}
                         loadingLabel={`Updating ${skill.name}`}
                         onPendingChange={setPendingActionKey}
                         onAction={() => handleUpdateSkill(skill)}
-                        tooltip="Update"
+                        tooltip={skill.managed ? 'Update' : 'Local skills cannot be updated'}
                       />
                       <SkillCardActionButton
                         actionKey={`remove:${skill.id}`}

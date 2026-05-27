@@ -28,8 +28,12 @@ export const skillsCommandResultSchema = z.object({
 export const installedSkillSchema = z.object({
   id: z.string(),
   name: z.string(),
+  managed: z.boolean(),
   source: z.optional(z.string()),
+  sourceUrl: z.optional(z.string()),
   sourceType: z.optional(z.string()),
+  repository: z.optional(z.string()),
+  repositoryUrl: z.optional(z.string()),
   scope: skillScopeSchema,
   agents: z.array(z.string()),
   ref: z.optional(z.string()),
