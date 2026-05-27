@@ -137,7 +137,7 @@ const getInstallDashboardRequest = (value: unknown): InstallDashboardRequest | n
     scope,
     agents: parseStringArray(record.agents),
     skills: parseStringArray(record.skills),
-    copy: record.copy === true,
+    copy: false,
     previousState: getPreviousState(record),
   };
 };
@@ -378,7 +378,6 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     const command = await commandAdapter.removeSkills({
       names: request.names,
       scope: request.scope,
-      agents: request.agents,
     });
 
     const payload = await createDashboardMutationPayload({

@@ -23,7 +23,7 @@ describe('skills command adapter argument construction', () => {
 
     await adapter.listSkills({ scope: 'global', agents: ['claude', 'codex'], json: true });
 
-    expect(calls).toEqual([['list', '--global', '--agent', 'claude', 'codex', '--json']]);
+    expect(calls).toEqual([['list', '--global', '--agent', 'claude-code', 'codex', '--json']]);
   });
 
   it('builds search command args', async () => {
@@ -54,7 +54,7 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['add', 'owner/repo', '--global', '--agent', 'claude', '--skill', 'a', 'b', '--copy'],
+      ['add', 'owner/repo', '--global', '--agent', 'claude-code', '--skill', 'a', 'b', '--yes'],
     ]);
   });
 
@@ -73,7 +73,7 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['add', 'owner/repo', '--project', '--agent', 'codex', '--skill', 'do-it'],
+      ['add', 'owner/repo', '--project', '--agent', 'codex', '--skill', 'do-it', '--yes'],
     ]);
   });
 
@@ -90,7 +90,69 @@ describe('skills command adapter argument construction', () => {
       agents: ['codex'],
     });
 
-    expect(calls).toEqual([['remove', 'skill-one', 'skill-two', '--global', '--agent', 'codex']]);
+    expect(calls).toEqual([
+      ['remove', 'skill-one', 'skill-two', '--global', '--agent', 'codex', '--yes'],
+    ]);
+  });
+
+  it('normalizes display agent labels before building command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.removeSkills({
+      names: ['animate'],
+      scope: 'global',
+      agents: ['Claude Code', 'Cline', 'Warp'],
+    });
+
+    expect(calls).toEqual([
+      ['remove', 'animate', '--global', '--agent', 'claude-code', 'cline', 'warp', '--yes'],
+    ]);
+  });
+
+  it('preserves wildcard agent selectors for install command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.installSkill({
+      source: 'owner/repo',
+      agents: ['*'],
+    });
+
+    expect(calls).toEqual([['add', 'owner/repo', '--agent', '*', '--yes']]);
+  });
+
+  it('normalizes legacy agent aliases before building command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.installSkill({
+      source: 'owner/repo',
+      agents: ['claude', 'copilot', 'gemini', 'deep-agents', 'kimi-code-cli'],
+    });
+
+    expect(calls).toEqual([
+      [
+        'add',
+        'owner/repo',
+        '--agent',
+        'claude-code',
+        'github-copilot',
+        'gemini-cli',
+        'deepagents',
+        'kimi-cli',
+        '--yes',
+      ],
+    ]);
   });
 
   it('builds update command args', async () => {

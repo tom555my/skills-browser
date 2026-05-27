@@ -44,6 +44,30 @@ const normalizeArgs = (values: readonly string[] | undefined): string[] => {
   return values.map((value) => value.trim()).filter((value) => value.length > 0);
 };
 
+const AGENT_ALIASES = new Map<string, string>([
+  ['claude', 'claude-code'],
+  ['copilot', 'github-copilot'],
+  ['deep-agents', 'deepagents'],
+  ['gemini', 'gemini-cli'],
+  ['kimi-code-cli', 'kimi-cli'],
+  ['qwen', 'qwen-code'],
+]);
+
+const normalizeAgentArg = (value: string): string => {
+  if (value.trim() === '*') {
+    return '*';
+  }
+
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return AGENT_ALIASES.get(normalized) ?? normalized;
+};
+
 const appendScopeFlag = (args: string[], scope: SkillScope | undefined): void => {
   if (scope === 'global') {
     args.push('--global');
@@ -60,10 +84,12 @@ const appendMultiValueFlag = (
   flag: '--agent' | '--skill',
   values: readonly string[] | undefined
 ): void => {
-  const normalized = normalizeArgs(values);
+  const normalized =
+    flag === '--agent' ? normalizeArgs(values).map(normalizeAgentArg) : normalizeArgs(values);
+  const valuesToAppend = normalized.filter((value) => value.length > 0);
 
-  if (normalized.length > 0) {
-    args.push(flag, ...normalized);
+  if (valuesToAppend.length > 0) {
+    args.push(flag, ...valuesToAppend);
   }
 };
 
@@ -121,9 +147,7 @@ export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkil
       appendMultiValueFlag(args, '--agent', options.agents);
       appendMultiValueFlag(args, '--skill', options.skills);
 
-      if (options.copy) {
-        args.push('--copy');
-      }
+      args.push('--yes');
 
       return runner(args);
     },
@@ -136,6 +160,7 @@ export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkil
       }
 
       appendMultiValueFlag(args, '--agent', options.agents);
+      args.push('--yes');
 
       return runner(args);
     },

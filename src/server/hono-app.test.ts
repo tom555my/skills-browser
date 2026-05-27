@@ -162,6 +162,7 @@ describe('dashboard install route', () => {
           scope: 'global',
           agents: [' codex '],
           skills: [' do-it '],
+          copy: true,
           previousState: createInstalledState(),
         }),
       })
@@ -203,6 +204,46 @@ describe('dashboard install route', () => {
     );
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe('dashboard remove route', () => {
+  it('removes selected skills from every agent in the selected scope', async () => {
+    const calls: unknown[] = [];
+    const app = createHonoApp({
+      commandAdapter: {
+        installSkill: async () => createCommandResult(['add']),
+        removeSkills: async (options) => {
+          calls.push(options);
+          return createCommandResult(['remove', 'animate', '--global', '--yes']);
+        },
+        updateSkills: async () => createCommandResult(['update']),
+      },
+      loadInstalledState: async () => createInstalledState(),
+    });
+
+    const response = await app.request(
+      new Request('http://localhost/api/dashboard/remove', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          names: [' animate '],
+          scope: 'global',
+          agents: ['Claude Code', 'Cline', 'Warp'],
+          previousState: createInstalledState(),
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        names: ['animate'],
+        scope: 'global',
+      },
+    ]);
   });
 });
 
