@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { BookOpenText, Eye, PackagePlus, X, XIcon } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useQueryState } from 'nuqs';
 import {
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useMemo,
@@ -232,19 +232,23 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                           const isViewing = selectedPreview?.id === result.id;
 
                           return (
-                            <CommandItem
+                            <motion.div
                               key={result.id}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{
+                                duration: 0.22,
+                                delay: Math.min(index, 8) * 0.024,
+                                ease: [0.23, 1, 0.32, 1],
+                              }}
+                            >
+                            <CommandItem
                               value={`${result.source} ${result.owner} ${result.repository}`}
                               data-checked={isViewing}
                               className={cn(
-                                'skill-list-item items-start gap-3 px-3 py-3',
+                                'items-start gap-3 px-3 py-3',
                                 isViewing && 'bg-accent text-accent-foreground'
                               )}
-                              style={
-                                {
-                                  '--skill-list-item-delay': `${Math.min(index, 8) * 24}ms`,
-                                } as CSSProperties
-                              }
                               onSelect={() => handlePreviewSearchResult(result)}
                             >
                               <Eye className="mt-0.5 text-muted-foreground" />
@@ -259,6 +263,7 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                               </span>
                               {isViewing ? <Badge variant="secondary">Viewing</Badge> : null}
                             </CommandItem>
+                            </motion.div>
                           );
                         })}
                       </CommandGroup>
@@ -275,7 +280,12 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
         </div>
 
         {selectedPreview ? (
-          <section className="hidden min-h-0 animate-in overflow-hidden rounded-xl border bg-card shadow-lg duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-right-2 lg:block">
+          <motion.section
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg lg:block"
+          >
             <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
               <div className="min-w-0">
                 <p className="truncate font-mono text-sm font-medium">{selectedPreview.source}</p>
@@ -323,7 +333,7 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                     : 'Preview URL unavailable for this result.'
               }
             />
-          </section>
+          </motion.section>
         ) : null}
       </DialogContent>
     </Dialog>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { RefreshCw, TerminalSquare } from 'lucide-react';
+import { motion } from 'motion/react';
 import { TextMorph } from 'torph/react';
 
 import type { InstalledSkillsScopeState, UpdateSkillsResponse } from '../../features/skills/state';
@@ -33,15 +34,18 @@ export function SummaryCard(props: {
 
 export function StatusBanner(props: { icon: ReactNode; className: string; message: string }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
       className={cn(
-        'flex animate-in items-start gap-2 rounded-xl border px-3 py-2 text-sm duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1',
+        'flex items-start gap-2 rounded-xl border px-3 py-2 text-sm',
         props.className
       )}
     >
       <span className="mt-0.5 shrink-0">{props.icon}</span>
       <p>{props.message}</p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -49,7 +53,12 @@ export function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
   const { command, names, scope, status } = props.outcome;
 
   return (
-    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+    >
+    <Card className="border shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -78,6 +87,7 @@ export function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
         {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -85,7 +95,12 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
   const { command, source, scope, status } = props.outcome;
 
   return (
-    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+    >
+    <Card className="border shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -114,12 +129,18 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
         {command.stderr.trim() ? <OutputBlock label="stderr" value={command.stderr} /> : null}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
 export function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) {
   return (
-    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+    >
+    <Card className="border shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <RefreshCw className="size-4" />
@@ -158,6 +179,7 @@ export function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) 
         ))}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 

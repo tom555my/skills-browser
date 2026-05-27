@@ -1,5 +1,4 @@
 import {
-  type CSSProperties,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -7,6 +6,7 @@ import {
   useState,
 } from 'react';
 import { Link } from '@tanstack/react-router';
+import { motion } from 'motion/react';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
 import { ExternalLink, Package, PackagePlus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 
@@ -248,11 +248,19 @@ export function BrowsePage() {
       ) : (
         <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
           {visibleSkills.map((skill, index) => (
-            <Card
+            <motion.div
               key={skill.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.22,
+                delay: Math.min(index, 8) * 0.028,
+                ease: [0.23, 1, 0.32, 1],
+              }}
+            >
+            <Card
               size="sm"
-              className="skill-list-item min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out [contain-intrinsic-size:12rem] [content-visibility:auto] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
-              style={{ '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties}
+              className="min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out [contain-intrinsic-size:12rem] [content-visibility:auto] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
             >
               <CardHeader>
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -348,6 +356,7 @@ export function BrowsePage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
           ))}
         </div>
       )}

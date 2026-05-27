@@ -132,11 +132,6 @@
 }
 
 @layer utilities {
-  .skill-list-item {
-    animation: skill-list-item-enter 220ms var(--ease-out) both;
-    animation-delay: var(--skill-list-item-delay, 0ms);
-  }
-
   .skill-markdown {
     @apply max-w-4xl text-sm leading-7 text-foreground;
   }
@@ -234,18 +229,6 @@
   .dark .skill-markdown .shiki,
   .dark .skill-markdown .shiki span {
     color: var(--shiki-dark) !important;
-  }
-}
-
-@keyframes skill-list-item-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
