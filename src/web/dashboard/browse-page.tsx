@@ -213,17 +213,30 @@ export function BrowsePage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
-          {visibleSkills.map((skill, index) => (
+        <motion.div
+          className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2"
+          variants={{
+            show: {
+              opacity: 1,
+            },
+            hide: {
+              opacity: 0,
+            },
+          }}
+          initial="hide"
+          animate="show"
+          transition={{
+            staggerChildren: 0.028,
+          }}
+        >
+          {visibleSkills.map((skill) => (
             <motion.div
               key={skill.id}
+              layoutId={skill.id}
               className="h-full"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.22,
-                delay: Math.min(index, 8) * 0.028,
-                ease: [0.23, 1, 0.32, 1],
+              variants={{
+                show: { opacity: 1, y: 0 },
+                hide: { opacity: 0, y: 8 },
               }}
             >
               <Card
@@ -314,7 +327,7 @@ export function BrowsePage() {
               </Card>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
       <InstallSkillDialog

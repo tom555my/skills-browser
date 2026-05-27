@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { BookOpenText, X, XIcon } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useQueryState } from 'nuqs';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -232,20 +232,28 @@ export function InstallSkillDialog({
                   ) : null}
 
                   {searchStatus === 'success' ? (
-                    <>
-                      <CommandGroup heading="Skills">
-                        {searchResults.map((result, index) => {
+                    <CommandGroup heading="Skills">
+                      <motion.div
+                        variants={{
+                          show: { opacity: 1 },
+                          hide: { opacity: 0 },
+                        }}
+                        initial="hide"
+                        animate="show"
+                        className="w-full"
+                        transition={{
+                          staggerChildren: 0.024,
+                        }}
+                      >
+                        {searchResults.map((result) => {
                           const isViewing = selectedPreview?.id === result.id;
 
                           return (
                             <motion.div
                               key={result.id}
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{
-                                duration: 0.22,
-                                delay: Math.min(index, 8) * 0.024,
-                                ease: [0.23, 1, 0.32, 1],
+                              variants={{
+                                show: { opacity: 1, x: 0 },
+                                hide: { opacity: 0, x: 8 },
                               }}
                             >
                               <CommandItem
@@ -270,8 +278,8 @@ export function InstallSkillDialog({
                             </motion.div>
                           );
                         })}
-                      </CommandGroup>
-                    </>
+                      </motion.div>
+                    </CommandGroup>
                   ) : null}
 
                   {searchParseWarning ? (
@@ -283,57 +291,67 @@ export function InstallSkillDialog({
           </Command>
         </div>
 
-        {selectedPreview ? (
-          <motion.section
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-            className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg lg:block"
-          >
-            <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
-              <div className="min-w-0">
-                <p className="truncate font-mono text-sm font-medium">{selectedPreview.source}</p>
-                <a
-                  href={selectedPreviewUrl ?? undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate text-xs text-muted-foreground"
-                >
-                  {selectedPreviewUrl ?? 'No preview URL available'}
-                </a>
+        <AnimatePresence>
+          {selectedPreview ? (
+            <motion.section
+              className="hidden min-h-0 overflow-hidden rounded-xl border bg-card shadow-lg lg:block"
+              variants={{
+                show: { opacity: 1, x: 0 },
+                hide: { opacity: 0, x: 8 },
+              }}
+              initial="hide"
+              animate="show"
+              exit="hide"
+            >
+              <div className="flex h-12 items-center justify-between gap-3 border-b px-4">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-medium">{selectedPreview.source}</p>
+                  <a
+                    href={selectedPreviewUrl ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate text-xs text-muted-foreground"
+                  >
+                    {selectedPreviewUrl ?? 'No preview URL available'}
+                  </a>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AddSkillPopover
+                    installSource={installSource}
+                    launchDirectory={payload?.launchDirectory}
+                    previousState={payload?.installedState}
+                    isInstalling={isInstalling}
+                    onInstallingChange={setIsInstalling}
+                    onInstalled={onInstalled}
+                    onDialogOpenChange={onOpenChange}
+                  />
+                  <DialogClose>
+                    <Button size="icon-sm" variant="ghost" disabled={isInstalling}>
+                      {isInstalling ? (
+                        <Spinner label="Adding skill" />
+                      ) : (
+                        <XIcon className="size-4" />
+                      )}
+                    </Button>
+                  </DialogClose>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <AddSkillPopover
-                  installSource={installSource}
-                  launchDirectory={payload?.launchDirectory}
-                  previousState={payload?.installedState}
-                  isInstalling={isInstalling}
-                  onInstallingChange={setIsInstalling}
-                  onInstalled={onInstalled}
-                  onDialogOpenChange={onOpenChange}
-                />
-                <DialogClose>
-                  <Button size="icon-sm" variant="ghost" disabled={isInstalling}>
-                    {isInstalling ? <Spinner label="Adding skill" /> : <XIcon className="size-4" />}
-                  </Button>
-                </DialogClose>
-              </div>
-            </div>
 
-            <SkillSearchPreview
-              result={selectedPreview}
-              details={selectedPreviewDetailsPayload?.details ?? null}
-              isLoading={Boolean(selectedPreviewUrl) && isSelectedPreviewDetailsPending}
-              errorMessage={
-                selectedPreviewDetailsError
-                  ? getErrorMessage(selectedPreviewDetailsError)
-                  : selectedPreviewUrl
-                    ? null
-                    : 'Preview URL unavailable for this result.'
-              }
-            />
-          </motion.section>
-        ) : null}
+              <SkillSearchPreview
+                result={selectedPreview}
+                details={selectedPreviewDetailsPayload?.details ?? null}
+                isLoading={Boolean(selectedPreviewUrl) && isSelectedPreviewDetailsPending}
+                errorMessage={
+                  selectedPreviewDetailsError
+                    ? getErrorMessage(selectedPreviewDetailsError)
+                    : selectedPreviewUrl
+                      ? null
+                      : 'Preview URL unavailable for this result.'
+                }
+              />
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
       </DialogContent>
     </Dialog>
   );
