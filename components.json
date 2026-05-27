@@ -20,8 +20,5 @@
     "hooks": "@/web/hooks"
   },
   "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {
-    "@dotmatrix": "https://dotmatrix.zzzzshawn.cloud/r/{name}.json"
-  }
+  "menuAccent": "subtle"
 }
