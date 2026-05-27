@@ -1,6 +1,9 @@
 #!/usr/bin/env bun
 
 import { createServer as createNetServer } from 'node:net';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 
 import index from './web/index.html';
@@ -14,6 +17,7 @@ type ParsedOptions = {
 
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 1996;
+const APPLICATION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 type StartEnvironment = {
   [key: string]: string | undefined;
@@ -40,8 +44,9 @@ export async function main() {
   const options = parseStartOptions(commandArgs);
   await assertPortAvailable(options.host, options.port);
 
-  const launchCwd = process.cwd();
+  const launchCwd = getLaunchDirectory();
   process.env.SKILLS_BROWSER_LAUNCH_CWD = launchCwd;
+  setApplicationWorkingDirectory();
 
   const server = Bun.serve({
     hostname: options.host,
@@ -134,6 +139,19 @@ export function parseStartOptions(
 function getEnvironmentValue(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function getLaunchDirectory(): string {
+  const fromEnv = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : process.cwd();
+}
+
+function setApplicationWorkingDirectory(): void {
+  if (!existsSync(resolve(APPLICATION_ROOT, 'package.json'))) {
+    return;
+  }
+
+  process.chdir(APPLICATION_ROOT);
 }
 
 function parsePort(rawPort: string): number {

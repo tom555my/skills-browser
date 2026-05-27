@@ -95,7 +95,7 @@ const appendMultiValueFlag = (
 
 const runSkillsCommand: SkillsCommandRunner = async (args) => {
   const cliPath = await getSkillsCliPath();
-  const process = await Bun.$`bun ${cliPath} ${args}`.quiet().nothrow();
+  const process = await Bun.$`bun ${cliPath} ${args}`.cwd(getSkillsCommandCwd()).quiet().nothrow();
 
   return {
     ok: process.exitCode === 0,
@@ -104,6 +104,11 @@ const runSkillsCommand: SkillsCommandRunner = async (args) => {
     stderr: process.stderr.toString(),
     exitCode: process.exitCode,
   };
+};
+
+export const getSkillsCommandCwd = (): string => {
+  const launchCwd = process.env.SKILLS_BROWSER_LAUNCH_CWD?.trim();
+  return launchCwd && launchCwd.length > 0 ? launchCwd : process.cwd();
 };
 
 export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkillsCommand) => {
