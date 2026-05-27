@@ -289,7 +289,7 @@ export function BrowsePage() {
             <Card
               key={skill.id}
               size="sm"
-              className="skill-list-item min-h-44 min-w-0 rounded-lg [contain-intrinsic-size:12rem] [content-visibility:auto] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              className="skill-list-item min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out [contain-intrinsic-size:12rem] [content-visibility:auto] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
               style={{ '--skill-list-item-delay': `${Math.min(index, 8) * 28}ms` } as CSSProperties}
             >
               <CardHeader>
