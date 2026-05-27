@@ -10,7 +10,7 @@ import { Separator } from '../components/ui/separator';
 import { Skeleton } from '../components/ui/skeleton';
 import { fetchSkillReadme } from '../api';
 import { AgentBadge } from './agent-badge';
-import { AnimatedText, LoadingGlyph, PageLoadingState } from './components';
+import { AnimatedText, Spinner, PageLoadingState } from './components';
 import { useDashboardData } from './data';
 import { useSkillActions } from './skill-actions';
 import {
@@ -166,7 +166,7 @@ export function SkillDetailsPage() {
               onClick={() => void handleUpdateSkill()}
             >
               {isUpdating ? (
-                <LoadingGlyph label={`Updating ${skill.name}`} />
+                <Spinner label={`Updating ${skill.name}`} />
               ) : (
                 <RefreshCw className="size-4" />
               )}
@@ -181,7 +181,7 @@ export function SkillDetailsPage() {
               onClick={() => void handleRemoveSkill()}
             >
               {isRemoving ? (
-                <LoadingGlyph label={`Removing ${skill.name}`} />
+                <Spinner label={`Removing ${skill.name}`} />
               ) : (
                 <Trash2 className="size-4" />
               )}

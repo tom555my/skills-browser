@@ -7,7 +7,7 @@ import { Toaster } from 'sileo';
 
 import { Button, buttonVariants } from '../components/ui/button';
 import { INSTALL_DIALOG_EVENT, THEME_STORAGE_KEY } from './constants';
-import { AnimatedText, LoadingGlyph } from './components';
+import { AnimatedText, Spinner } from './components';
 import { DashboardDataProvider, useDashboardActions } from './data';
 import type { ScopeFilter, Theme } from './types';
 import { getThemeFromDom, scopeLabel } from './utils';
@@ -118,7 +118,7 @@ function TopBar(props: { theme: Theme; onThemeChange: (theme: Theme) => void }) 
             aria-label="Refresh installed skills"
           >
             {isRefreshing ? (
-              <LoadingGlyph label="Refreshing installed skills" size={14} />
+              <Spinner label="Refreshing installed skills" size={14} />
             ) : (
               <RefreshCw className="size-4" />
             )}

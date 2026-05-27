@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
@@ -22,9 +16,9 @@ import {
   CardTitle,
 } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { AgentBadge } from './agent-badge';
+import { AgentBadgeRow } from './agent-badge-row';
 import { INSTALL_DIALOG_EVENT } from './constants';
-import { LoadingGlyph, PageLoadingState, StatusBanner } from './components';
+import { Spinner, PageLoadingState, StatusBanner } from './components';
 import { useDashboardActions, useDashboardData } from './data';
 import { InstallSkillDialog } from './install-skill-dialog';
 import { useSkillActions } from './skill-actions';
@@ -250,6 +244,7 @@ export function BrowsePage() {
           {visibleSkills.map((skill, index) => (
             <motion.div
               key={skill.id}
+              className="h-full"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
@@ -258,104 +253,100 @@ export function BrowsePage() {
                 ease: [0.23, 1, 0.32, 1],
               }}
             >
-            <Card
-              size="sm"
-              className="min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out [contain-intrinsic-size:12rem] [content-visibility:auto] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
-            >
-              <CardHeader>
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <Link
-                      to="/skill/$skillId"
-                      params={{ skillId: skill.id }}
-                      className="block truncate font-mono text-base font-medium hover:underline"
-                    >
-                      {skill.name}
-                    </Link>
-                    <p className="truncate font-mono text-xs text-muted-foreground">
-                      {skill.primarySource}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
-                      {skill.sourceType ? (
-                        <Badge variant="outline">{skill.sourceType}</Badge>
-                      ) : null}
-                      {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+              <Card
+                size="sm"
+                className="h-full min-h-44 min-w-0 rounded-lg transition-[background-color,box-shadow,transform] duration-150 ease-out [contain-intrinsic-size:12rem] [content-visibility:auto] hover:-translate-y-0.5 hover:bg-accent/40 hover:shadow-sm"
+              >
+                <CardHeader>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-2">
+                      <Link
+                        to="/skill/$skillId"
+                        params={{ skillId: skill.id }}
+                        className="block truncate font-mono text-base font-medium hover:underline"
+                      >
+                        {skill.name}
+                      </Link>
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        {skill.primarySource}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary">{scopeLabel(skill.scope)}</Badge>
+                        {skill.sourceType ? (
+                          <Badge variant="outline">{skill.sourceType}</Badge>
+                        ) : null}
+                        {skill.ref ? <Badge variant="outline">ref: {skill.ref}</Badge> : null}
+                      </div>
                     </div>
+
+                    <CardAction className="static col-auto row-auto flex shrink-0 items-center gap-1 self-auto justify-self-auto">
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                            aria-label={`Update ${skill.name}`}
+                            onClick={() => void handleUpdateSkill(skill)}
+                          >
+                            {updatingSkillId === skill.id ? (
+                              <Spinner label={`Updating ${skill.name}`} />
+                            ) : (
+                              <RefreshCw className="size-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Update</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
+                            aria-label={`Remove ${skill.name}`}
+                            onClick={() => void handleRemoveSkill(skill)}
+                          >
+                            {removingSkillId === skill.id ? (
+                              <Spinner label={`Removing ${skill.name}`} />
+                            ) : (
+                              <Trash2 className="size-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Link
+                            to="/skill/$skillId"
+                            params={{ skillId: skill.id }}
+                            aria-label={`Open ${skill.name} details`}
+                            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                          >
+                            <ExternalLink className="size-4" />
+                          </Link>
+                        </TooltipTrigger>
+                        <TooltipContent>Details</TooltipContent>
+                      </Tooltip>
+                    </CardAction>
                   </div>
+                </CardHeader>
 
-                  <CardAction className="static col-auto row-auto flex shrink-0 items-center gap-1 self-auto justify-self-auto">
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                          aria-label={`Update ${skill.name}`}
-                          onClick={() => void handleUpdateSkill(skill)}
-                        >
-                          {updatingSkillId === skill.id ? (
-                            <LoadingGlyph label={`Updating ${skill.name}`} />
-                          ) : (
-                            <RefreshCw className="size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Update</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          disabled={removingSkillId === skill.id || updatingSkillId === skill.id}
-                          aria-label={`Remove ${skill.name}`}
-                          onClick={() => void handleRemoveSkill(skill)}
-                        >
-                          {removingSkillId === skill.id ? (
-                            <LoadingGlyph label={`Removing ${skill.name}`} />
-                          ) : (
-                            <Trash2 className="size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Remove</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Link
-                          to="/skill/$skillId"
-                          params={{ skillId: skill.id }}
-                          aria-label={`Open ${skill.name} details`}
-                          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-                        >
-                          <ExternalLink className="size-4" />
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent>Details</TooltipContent>
-                    </Tooltip>
-                  </CardAction>
-                </div>
-              </CardHeader>
-
-              <CardContent className="mt-auto flex flex-col gap-2">
-                <p className="line-clamp-2 text-sm text-muted-foreground">{skill.description}</p>
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Agents</p>
-                  {skill.agents.length > 0 ? (
-                    <div className="flex min-h-8 flex-wrap gap-1.5 rounded-md border border-dashed p-1.5">
-                      {skill.agents.map((agent) => (
-                        <AgentBadge key={`${skill.id}:${agent}`} agent={agent} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex min-h-8 items-center rounded-md border border-dashed px-2 text-xs text-muted-foreground">
-                      No agents declared
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                <CardContent className="mt-auto flex flex-col gap-2">
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{skill.description}</p>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Agents</p>
+                    {skill.agents.length > 0 ? (
+                      <AgentBadgeRow agents={skill.agents} skillId={skill.id} />
+                    ) : (
+                      <div className="flex min-h-8 items-center rounded-md border border-dashed px-2 text-xs text-muted-foreground">
+                        No agents declared
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </div>

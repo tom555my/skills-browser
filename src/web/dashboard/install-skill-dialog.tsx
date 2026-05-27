@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { BookOpenText, Eye, PackagePlus, X, XIcon } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useQueryState } from 'nuqs';
+import { parseAsStringEnum, useQueryState } from 'nuqs';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
@@ -15,7 +15,8 @@ import type {
   SearchResultSkill,
   SkillDetailsState,
 } from '../../features/skills/state';
-import { fetchSkillDetails, searchSkills } from '../api';
+import type { SkillScope } from '../../features/skills/types';
+import { fetchSkillDetails, installDashboardSkills, searchSkills } from '../api';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -35,9 +36,10 @@ import {
 } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
-import { AnimatedText, LoadingGlyph, LoadingIndicator, StatusBanner } from './components';
+import { AnimatedText, Spinner, LoadingIndicator, StatusBanner } from './components';
+import { showErrorToast, showSuccessToast } from './toasts';
 import type { SearchStatus } from './types';
-import { getErrorMessage } from './utils';
+import { createCommandFailureMessage, getErrorMessage } from './utils';
 
 type InstallSkillDialogProps = {
   open: boolean;
@@ -46,7 +48,12 @@ type InstallSkillDialogProps = {
   onInstalled: () => Promise<void>;
 };
 
-export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogProps) {
+export function InstallSkillDialog({
+  open,
+  onOpenChange,
+  payload,
+  onInstalled,
+}: InstallSkillDialogProps) {
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
   const [searchResults, setSearchResults] = useState<SearchResultSkill[]>([]);
   const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
@@ -57,6 +64,10 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
   const installSearchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useQueryState('q');
   const [previewId, setPreviewId] = useQueryState('preview');
+  const [scope] = useQueryState(
+    'scope',
+    parseAsStringEnum<SkillScope>(['project', 'global']).withDefault('project')
+  );
 
   const hasSearchResultContainer = searchStatus !== 'idle';
   const selectedPreview = useMemo(() => {
@@ -151,6 +162,35 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
     setInstallSource(result.source);
   };
 
+  const handleInstall = async () => {
+    if (!installSource) {
+      return;
+    }
+
+    setIsInstalling(true);
+
+    try {
+      const outcome = await installDashboardSkills({
+        source: installSource,
+        scope,
+        previousState: payload?.installedState,
+      });
+
+      if (outcome.command.ok) {
+        showSuccessToast('Skill installed', `${installSource} was installed in ${scope} scope.`);
+        void onInstalled();
+        onOpenChange(false);
+        return;
+      }
+
+      showErrorToast('Install failed', createCommandFailureMessage(outcome.command));
+    } catch (error) {
+      showErrorToast('Install request failed', getErrorMessage(error));
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -242,27 +282,27 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                                 ease: [0.23, 1, 0.32, 1],
                               }}
                             >
-                            <CommandItem
-                              value={`${result.source} ${result.owner} ${result.repository}`}
-                              data-checked={isViewing}
-                              className={cn(
-                                'items-start gap-3 px-3 py-3',
-                                isViewing && 'bg-accent text-accent-foreground'
-                              )}
-                              onSelect={() => handlePreviewSearchResult(result)}
-                            >
-                              <Eye className="mt-0.5 text-muted-foreground" />
-                              <span className="min-w-0 flex-1 space-y-1">
-                                <span className="block truncate font-mono text-sm font-medium">
-                                  {result.source}
+                              <CommandItem
+                                value={`${result.source} ${result.owner} ${result.repository}`}
+                                data-checked={isViewing}
+                                className={cn(
+                                  'items-start gap-3 px-3 py-3',
+                                  isViewing && 'bg-accent text-accent-foreground'
+                                )}
+                                onSelect={() => handlePreviewSearchResult(result)}
+                              >
+                                <Eye className="mt-0.5 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 space-y-1">
+                                  <span className="block truncate font-mono text-sm font-medium">
+                                    {result.source}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {result.owner}/{result.repository}
+                                    {result.installs ? ` · ${result.installs} installs` : ''}
+                                  </span>
                                 </span>
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  {result.owner}/{result.repository}
-                                  {result.installs ? ` · ${result.installs} installs` : ''}
-                                </span>
-                              </span>
-                              {isViewing ? <Badge variant="secondary">Viewing</Badge> : null}
-                            </CommandItem>
+                                {isViewing ? <Badge variant="secondary">Viewing</Badge> : null}
+                              </CommandItem>
                             </motion.div>
                           );
                         })}
@@ -299,9 +339,9 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                 </a>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" disabled={isInstalling}>
+                <Button size="sm" disabled={isInstalling} onClick={handleInstall}>
                   {isInstalling ? (
-                    <LoadingGlyph label="Adding skill" />
+                    <Spinner label="Adding skill" />
                   ) : (
                     <PackagePlus className="size-4" />
                   )}
@@ -311,11 +351,7 @@ export function InstallSkillDialog({ open, onOpenChange }: InstallSkillDialogPro
                 </Button>
                 <DialogClose>
                   <Button size="icon-sm" variant="ghost" disabled={isInstalling}>
-                    {isInstalling ? (
-                      <LoadingGlyph label="Adding skill" />
-                    ) : (
-                      <XIcon className="size-4" />
-                    )}
+                    {isInstalling ? <Spinner label="Adding skill" /> : <XIcon className="size-4" />}
                   </Button>
                 </DialogClose>
               </div>
