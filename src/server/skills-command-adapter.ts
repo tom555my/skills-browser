@@ -54,6 +54,10 @@ const AGENT_ALIASES = new Map<string, string>([
 ]);
 
 const normalizeAgentArg = (value: string): string => {
+  if (value.trim() === '*') {
+    return '*';
+  }
+
   const normalized = value
     .trim()
     .toLowerCase()
@@ -82,9 +86,10 @@ const appendMultiValueFlag = (
 ): void => {
   const normalized =
     flag === '--agent' ? normalizeArgs(values).map(normalizeAgentArg) : normalizeArgs(values);
+  const valuesToAppend = normalized.filter((value) => value.length > 0);
 
-  if (normalized.length > 0) {
-    args.push(flag, ...normalized);
+  if (valuesToAppend.length > 0) {
+    args.push(flag, ...valuesToAppend);
   }
 };
 
@@ -142,9 +147,7 @@ export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkil
       appendMultiValueFlag(args, '--agent', options.agents);
       appendMultiValueFlag(args, '--skill', options.skills);
 
-      if (options.copy) {
-        args.push('--copy');
-      }
+      args.push('--yes');
 
       return runner(args);
     },
@@ -157,6 +160,7 @@ export const createSkillsCommandAdapter = (runner: SkillsCommandRunner = runSkil
       }
 
       appendMultiValueFlag(args, '--agent', options.agents);
+      args.push('--yes');
 
       return runner(args);
     },

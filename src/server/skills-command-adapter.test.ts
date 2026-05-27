@@ -54,7 +54,7 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['add', 'owner/repo', '--global', '--agent', 'claude-code', '--skill', 'a', 'b', '--copy'],
+      ['add', 'owner/repo', '--global', '--agent', 'claude-code', '--skill', 'a', 'b', '--yes'],
     ]);
   });
 
@@ -73,7 +73,7 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['add', 'owner/repo', '--project', '--agent', 'codex', '--skill', 'do-it'],
+      ['add', 'owner/repo', '--project', '--agent', 'codex', '--skill', 'do-it', '--yes'],
     ]);
   });
 
@@ -90,7 +90,9 @@ describe('skills command adapter argument construction', () => {
       agents: ['codex'],
     });
 
-    expect(calls).toEqual([['remove', 'skill-one', 'skill-two', '--global', '--agent', 'codex']]);
+    expect(calls).toEqual([
+      ['remove', 'skill-one', 'skill-two', '--global', '--agent', 'codex', '--yes'],
+    ]);
   });
 
   it('normalizes display agent labels before building command args', async () => {
@@ -107,8 +109,23 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['remove', 'animate', '--global', '--agent', 'claude-code', 'cline', 'warp'],
+      ['remove', 'animate', '--global', '--agent', 'claude-code', 'cline', 'warp', '--yes'],
     ]);
+  });
+
+  it('preserves wildcard agent selectors for install command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.installSkill({
+      source: 'owner/repo',
+      agents: ['*'],
+    });
+
+    expect(calls).toEqual([['add', 'owner/repo', '--agent', '*', '--yes']]);
   });
 
   it('normalizes legacy agent aliases before building command args', async () => {
@@ -133,6 +150,7 @@ describe('skills command adapter argument construction', () => {
         'gemini-cli',
         'deepagents',
         'kimi-cli',
+        '--yes',
       ],
     ]);
   });
