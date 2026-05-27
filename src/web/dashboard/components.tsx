@@ -35,7 +35,7 @@ export function StatusBanner(props: { icon: ReactNode; className: string; messag
   return (
     <div
       className={cn(
-        'flex items-start gap-2 rounded-xl border px-3 py-2 text-sm duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1',
+        'flex animate-in items-start gap-2 rounded-xl border px-3 py-2 text-sm duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1',
         props.className
       )}
     >
@@ -49,7 +49,7 @@ export function RemoveOperationCard(props: { outcome: RemoveOutcome }) {
   const { command, names, scope, status } = props.outcome;
 
   return (
-    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
+    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -85,7 +85,7 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
   const { command, source, scope, status } = props.outcome;
 
   return (
-    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
+    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <TerminalSquare className="size-4" />
@@ -119,7 +119,7 @@ export function InstallOperationCard(props: { outcome: InstallOutcome }) {
 
 export function UpdateOperationCard(props: { results: UpdateSkillsResponse[] }) {
   return (
-    <Card className="border shadow-none duration-200 ease-[var(--ease-out)] animate-in fade-in-0 slide-in-from-top-1">
+    <Card className="animate-in border shadow-none duration-200 ease-[var(--ease-out)] fade-in-0 slide-in-from-top-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <RefreshCw className="size-4" />
@@ -272,7 +272,7 @@ export function LoadingIndicator(props: { label: string; className?: string }) {
 
 export function PageLoadingState() {
   return (
-    <div className="flex flex-1 w-full h-full items-center justify-center">
+    <div className="flex h-full w-full flex-1 items-center justify-center">
       <LoadingIndicator label="Loading skills" />
     </div>
   );

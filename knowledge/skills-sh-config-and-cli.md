@@ -39,12 +39,14 @@ The full supported-agent table is also published in upstream README under "Suppo
 `skills` uses two lock files:
 
 1. Project lock file
+
 - Path: `<cwd>/skills-lock.json`
 - Managed by: `src/local-lock.ts`
 - Purpose: project-scoped reproducibility; intended to be committed
 - Entry data includes: `source`, `ref?`, `sourceType`, `computedHash`
 
 2. Global lock file
+
 - Path: `$XDG_STATE_HOME/skills/.skill-lock.json` if `XDG_STATE_HOME` is set
 - Fallback path: `~/.agents/.skill-lock.json`
 - Managed by: `src/skill-lock.ts` and also update flow in `src/cli.ts`

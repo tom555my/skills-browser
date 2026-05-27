@@ -13,8 +13,7 @@
           const key = 'skills-browser-theme';
           const savedTheme = localStorage.getItem(key);
           isDark = savedTheme ? savedTheme === 'dark' : true;
-        } catch {
-        }
+        } catch {}
 
         document.documentElement.classList.toggle('dark', isDark);
       })();

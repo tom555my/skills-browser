@@ -6,7 +6,13 @@ const require = createRequire(import.meta.url);
 const rootDir = join(import.meta.dir, '..');
 const outputFile = join(rootDir, 'src/server/.generated/skills-bundle.ts');
 
-const SKIP = new Set(['.DS_Store', 'README.md', 'ThirdPartyNoticeText.txt', 'CHANGELOG.md', 'LICENSE']);
+const SKIP = new Set([
+  '.DS_Store',
+  'README.md',
+  'ThirdPartyNoticeText.txt',
+  'CHANGELOG.md',
+  'LICENSE',
+]);
 
 async function collectFiles(dir: string, base: string): Promise<Record<string, string>> {
   const files: Record<string, string> = {};

@@ -242,7 +242,7 @@ export function SkillMarkdown({ markdown }: { markdown: string }) {
 
   if (state.status === 'pending') {
     return (
-      <pre className="min-w-0 overflow-x-auto whitespace-pre-wrap rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 text-foreground">
+      <pre className="min-w-0 overflow-x-auto rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 whitespace-pre-wrap text-foreground">
         {plainTextFallback}
       </pre>
     );
@@ -252,7 +252,7 @@ export function SkillMarkdown({ markdown }: { markdown: string }) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-destructive">Unable to render markdown: {state.error}</p>
-        <pre className="min-w-0 overflow-x-auto whitespace-pre-wrap rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 text-foreground">
+        <pre className="min-w-0 overflow-x-auto rounded-lg border bg-muted/40 p-5 font-mono text-sm leading-6 whitespace-pre-wrap text-foreground">
           {plainTextFallback}
         </pre>
       </div>

@@ -255,7 +255,7 @@ function SkillReadmeBody({
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <div className="pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+        <div className="pb-3 font-mono text-xs font-medium text-muted-foreground uppercase">
           Instructions
         </div>
         <SkillMarkdown markdown={document.markdown} />
@@ -269,7 +269,7 @@ function SkillFrontmatter({ frontmatter }: { frontmatter: string }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="pb-3 font-mono text-xs font-medium uppercase text-muted-foreground">
+      <div className="pb-3 font-mono text-xs font-medium text-muted-foreground uppercase">
         YAML frontmatter
       </div>
       <div className="overflow-hidden rounded-lg border bg-muted/20">
@@ -319,7 +319,7 @@ function SkillFrontmatterValueView({ value }: { value: SkillFrontmatterValue }) 
     return <SkillFrontmatterKeyValueTable value={value} />;
   }
 
-  return <span className="whitespace-pre-wrap break-words">{frontmatterValueToText(value)}</span>;
+  return <span className="break-words whitespace-pre-wrap">{frontmatterValueToText(value)}</span>;
 }
 
 function SkillFrontmatterKeyValueTable({

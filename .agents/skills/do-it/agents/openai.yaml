@@ -1,4 +1,4 @@
 interface:
-  display_name: "Do It"
-  short_description: "Standard process for coding tasks"
-  default_prompt: "Use $do-it to execute this task end-to-end with clear planning, implementation, validation, and handoff."
+  display_name: 'Do It'
+  short_description: 'Standard process for coding tasks'
+  default_prompt: 'Use $do-it to execute this task end-to-end with clear planning, implementation, validation, and handoff.'

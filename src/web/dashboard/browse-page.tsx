@@ -8,15 +8,7 @@ import {
 } from 'react';
 import { Link } from '@tanstack/react-router';
 import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
-import {
-  ExternalLink,
-  Package,
-  PackagePlus,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { ExternalLink, Package, PackagePlus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 
 import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';

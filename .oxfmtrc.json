@@ -7,7 +7,7 @@
   "singleQuote": true,
   "endOfLine": "lf",
   "insertFinalNewline": true,
-  "sortPackageJson": false,
+  "sortPackageJson": true,
   "sortTailwindcss": {
     "stylesheet": "src/web/styles/globals.css",
     "functions": ["cn", "cva"]
