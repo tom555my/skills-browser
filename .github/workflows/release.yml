@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: Prerelease tag (e.g. alpha, beta — leave empty for stable)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    needs: ci
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Bump version
+        id: bump
+        run: |
+          BUMP_FLAGS="--no-git-tag-version"
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            npm version ${{ inputs.bump }} $BUMP_FLAGS --preid="${{ inputs.prerelease }}"
+          else
+            npm version ${{ inputs.bump }} $BUMP_FLAGS
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Update changelog
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          sed -i "s/## \[${{ steps.bump.outputs.version }}\] - unreleased/## [${{ steps.bump.outputs.version }}] - ${DATE}/" CHANGELOG.md
+
+      - name: Commit and tag
+        run: |
+          git add package.json CHANGELOG.md
+          git commit -m "chore: release v${{ steps.bump.outputs.version }}"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    needs: bump
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            artifact: skills-browser-linux-x64
+          - os: macos-13
+            target: macos-x64
+            artifact: skills-browser-macos-x64
+          - os: macos-latest
+            target: macos-arm64
+            artifact: skills-browser-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - run: bun install
+      - run: bun run build
+
+      - name: Rename binary
+        run: mv dist/skills-browser dist/${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+      - name: Smoke test
+        run: |
+          chmod +x dist/${{ matrix.artifact }}
+          ./dist/${{ matrix.artifact }} start --help || true
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [bump, build]
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/skills-browser
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - run: bun install
+
+      - name: Set npm token
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - run: npm publish --access public --tag ${{ inputs.prerelease && 'next' || 'latest' }}
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [bump, publish-npm]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: skills-browser-*
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump.outputs.tag }}
+          name: ${{ needs.bump.outputs.tag }}
+          body: |
+            ### Install
+
+            ```bash
+            bun install -g skills-browser@${{ needs.bump.outputs.version }}
+            ```
+
+            Or download the standalone binary for your platform below.
+          files: dist/skills-browser-*
+          prerelease: ${{ inputs.prerelease != '' }}
+          generate_release_notes: true
