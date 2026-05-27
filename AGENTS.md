@@ -13,7 +13,7 @@ bun run dev          # NODE_ENV=development bun run src/cli.ts start, default lo
 bun run start        # NODE_ENV=production bun run src/cli.ts start
 bun run build        # bun build --compile ./src/cli.ts --outfile ./dist/skills-browser
 bun run lint         # oxlint src
-bun run typecheck    # tsc --noEmit
+bun run typecheck    # bun run embed:skills && tsgo --noEmit
 bun run test         # bun test
 bun run format       # oxfmt "src/**/*.{ts,tsx}"
 ```
