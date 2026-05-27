@@ -23,7 +23,7 @@ describe('skills command adapter argument construction', () => {
 
     await adapter.listSkills({ scope: 'global', agents: ['claude', 'codex'], json: true });
 
-    expect(calls).toEqual([['list', '--global', '--agent', 'claude', 'codex', '--json']]);
+    expect(calls).toEqual([['list', '--global', '--agent', 'claude-code', 'codex', '--json']]);
   });
 
   it('builds search command args', async () => {
@@ -54,7 +54,7 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([
-      ['add', 'owner/repo', '--global', '--agent', 'claude', '--skill', 'a', 'b', '--copy'],
+      ['add', 'owner/repo', '--global', '--agent', 'claude-code', '--skill', 'a', 'b', '--copy'],
     ]);
   });
 
@@ -91,6 +91,50 @@ describe('skills command adapter argument construction', () => {
     });
 
     expect(calls).toEqual([['remove', 'skill-one', 'skill-two', '--global', '--agent', 'codex']]);
+  });
+
+  it('normalizes display agent labels before building command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.removeSkills({
+      names: ['animate'],
+      scope: 'global',
+      agents: ['Claude Code', 'Cline', 'Warp'],
+    });
+
+    expect(calls).toEqual([
+      ['remove', 'animate', '--global', '--agent', 'claude-code', 'cline', 'warp'],
+    ]);
+  });
+
+  it('normalizes legacy agent aliases before building command args', async () => {
+    const calls: string[][] = [];
+    const adapter = createSkillsCommandAdapter(async (args) => {
+      calls.push([...args]);
+      return createResult(args);
+    });
+
+    await adapter.installSkill({
+      source: 'owner/repo',
+      agents: ['claude', 'copilot', 'gemini', 'deep-agents', 'kimi-code-cli'],
+    });
+
+    expect(calls).toEqual([
+      [
+        'add',
+        'owner/repo',
+        '--agent',
+        'claude-code',
+        'github-copilot',
+        'gemini-cli',
+        'deepagents',
+        'kimi-cli',
+      ],
+    ]);
   });
 
   it('builds update command args', async () => {
