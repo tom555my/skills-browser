@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { initLogger } from 'evlog';
 import { evlog, type EvlogVariables } from 'evlog/hono';
 
@@ -29,6 +29,8 @@ import {
 import { loadSkillDetailsState } from './skill-details-state';
 
 type CommandAdapter = Pick<SkillsCommandAdapter, 'installSkill' | 'removeSkills' | 'updateSkills'>;
+
+type HonoContext = Context<EvlogVariables>;
 
 type CreateHonoAppOptions = {
   commandAdapter?: CommandAdapter;
@@ -157,8 +159,80 @@ const createOperationFailureMessage = (result: SkillsCommandResult): string => {
   return `Command "${command}" failed (exit code ${exitCode}).`;
 };
 
+const MAX_LOG_OUTPUT_LENGTH = 2_000;
+
 const getErrorMessage = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error);
+};
+
+const getLogOutput = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length <= MAX_LOG_OUTPUT_LENGTH) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, MAX_LOG_OUTPUT_LENGTH)}...`;
+};
+
+const logServerError = (
+  context: HonoContext,
+  error: unknown,
+  fields: Record<string, unknown> = {}
+) => {
+  const log = context.get('log');
+  const message = getErrorMessage(error);
+
+  log.error(error instanceof Error ? error : message, {
+    server: {
+      error: message,
+      ...fields,
+    },
+  });
+};
+
+const logCommandFailure = (
+  context: HonoContext,
+  operation: string,
+  result: SkillsCommandResult
+) => {
+  if (result.ok) {
+    return;
+  }
+
+  logServerError(context, createOperationFailureMessage(result), {
+    operation,
+    command: result.command,
+    exitCode: result.exitCode,
+    stdout: getLogOutput(result.stdout),
+    stderr: getLogOutput(result.stderr),
+  });
+};
+
+const logInstalledStateFailures = (
+  context: HonoContext,
+  operation: string,
+  state: InstalledSkillsState
+) => {
+  for (const scope of ['project', 'global'] as const) {
+    const scopeState = state[scope];
+    if (!scopeState.error) {
+      continue;
+    }
+
+    logServerError(context, scopeState.error, {
+      operation,
+      scope,
+      stale: scopeState.stale,
+      command: scopeState.command?.command,
+      exitCode: scopeState.command?.exitCode,
+      stdout: getLogOutput(scopeState.command?.stdout),
+      stderr: getLogOutput(scopeState.command?.stderr),
+    });
+  }
 };
 
 const defaultCommandAdapter = createSkillsCommandAdapter();
@@ -237,28 +311,45 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
     })
   );
 
+  app.onError((error, context) => {
+    logServerError(context, error, {
+      operation: 'request',
+      path: context.req.path,
+      method: context.req.method,
+    });
+
+    return context.json(
+      {
+        error: getErrorMessage(error),
+      },
+      500
+    );
+  });
+
   app.get('/api/health', (context) => {
     return context.json({ ok: true });
   });
 
   app.get('/api/dashboard', async (context) => {
-    return context.json(
-      await createDashboardPayload({
-        loadInstalledState,
-      })
-    );
+    const payload = await createDashboardPayload({
+      loadInstalledState,
+    });
+    logInstalledStateFailures(context, 'dashboard.load', payload.installedState);
+
+    return context.json(payload);
   });
 
   app.post('/api/dashboard/refresh', async (context) => {
     const body = await context.req.json().catch(() => undefined);
     const previousState = getPreviousState(body);
 
-    return context.json(
-      await createDashboardPayload({
-        loadInstalledState,
-        previousState,
-      })
-    );
+    const payload = await createDashboardPayload({
+      loadInstalledState,
+      previousState,
+    });
+    logInstalledStateFailures(context, 'dashboard.refresh', payload.installedState);
+
+    return context.json(payload);
   });
 
   app.post('/api/dashboard/remove', async (context) => {
@@ -296,6 +387,8 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       scope: request.scope,
       command,
     });
+    logCommandFailure(context, 'dashboard.remove', command);
+    logInstalledStateFailures(context, 'dashboard.remove.refresh', payload.installedState);
 
     return context.json({
       payload,
@@ -348,6 +441,8 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       command,
       scope: request.scope,
     };
+    logCommandFailure(context, 'dashboard.install', command);
+    logInstalledStateFailures(context, 'dashboard.install.refresh', payload.installedState);
 
     return context.json(response);
   });
@@ -378,6 +473,7 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       scope: request.scope,
       command,
     };
+    logCommandFailure(context, 'dashboard.update', command);
 
     return context.json(response);
   });
@@ -396,8 +492,11 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
       },
     });
 
+    const searchState = await loadSearchState(query);
+    logCommandFailure(context, 'search', searchState.command);
+
     return context.json({
-      searchState: await loadSearchState(query),
+      searchState,
     });
   });
 
@@ -420,6 +519,10 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
         details: await loadDetailsState(url),
       });
     } catch (error) {
+      logServerError(context, error, {
+        operation: 'skill-details',
+      });
+
       return context.json(
         {
           error: getErrorMessage(error),
@@ -448,6 +551,10 @@ export const createHonoApp = (options: CreateHonoAppOptions = {}) => {
         readme: await loadReadmeState(skillId),
       });
     } catch (error) {
+      logServerError(context, error, {
+        operation: 'skill-readme',
+      });
+
       return context.json(
         {
           error: getErrorMessage(error),
