@@ -62,3 +62,8 @@ bun run format       # oxfmt
 - `.oxfmtrc.json` sorts Tailwind classes in `cn()` and `cva()` calls using `src/web/styles/globals.css` as the Tailwind v4 stylesheet.
 - TypeScript is strict with `noUnusedLocals` and `noUnusedParameters`; keep test doubles and imports minimal.
 - Avoid comments unless they explain non-obvious behavior.
+
+## Tips
+
+- To resolve conflicts with `codedb.snapshot`, regenerate it using `codedb snapshot`.
+- Prioritize codedb tools for navigating and understanding the codebase.
