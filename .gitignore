@@ -36,6 +36,7 @@ npm-debug.log*
 # Personal tooling
 .agents/
 .codex/
+codedb.snapshot
 setup.sh
 
 # Misc
