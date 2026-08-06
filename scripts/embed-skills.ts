@@ -34,26 +34,57 @@ async function collectFiles(dir: string, base: string): Promise<Record<string, s
   return files;
 }
 
+interface PackageManifest {
+  dependencies?: Record<string, string>;
+  name: string;
+  version: string;
+}
+
+async function collectPackageTree(
+  packageDir: string,
+  manifest: Record<string, string>,
+  versions: Map<string, string>
+): Promise<PackageManifest> {
+  const packageManifest = JSON.parse(
+    await readFile(join(packageDir, 'package.json'), 'utf-8')
+  ) as PackageManifest;
+  const existingVersion = versions.get(packageManifest.name);
+
+  if (existingVersion) {
+    if (existingVersion !== packageManifest.version) {
+      throw new Error(
+        `Cannot flatten ${packageManifest.name}@${packageManifest.version}; ` +
+          `${existingVersion} is already bundled`
+      );
+    }
+    return packageManifest;
+  }
+
+  versions.set(packageManifest.name, packageManifest.version);
+
+  const packageFiles = await collectFiles(packageDir, packageDir);
+  for (const [path, data] of Object.entries(packageFiles)) {
+    manifest[`node_modules/${packageManifest.name}/${path}`] = data;
+  }
+
+  const packageRequire = createRequire(join(packageDir, 'package.json'));
+  for (const dependency of Object.keys(packageManifest.dependencies ?? {})) {
+    const dependencyDir = dirname(packageRequire.resolve(`${dependency}/package.json`));
+    await collectPackageTree(dependencyDir, manifest, versions);
+  }
+
+  return packageManifest;
+}
+
 async function main() {
   const skillsPkgDir = dirname(require.resolve('skills/package.json'));
-  const skillsPkg = JSON.parse(await readFile(join(skillsPkgDir, 'package.json'), 'utf-8'));
-
-  const yamlPkgDir = dirname(require.resolve('yaml/package.json'));
-  const yamlPkg = JSON.parse(await readFile(join(yamlPkgDir, 'package.json'), 'utf-8'));
-
-  console.log(`Embedding skills@${skillsPkg.version} + yaml@${yamlPkg.version}`);
-
   const manifest: Record<string, string> = {};
+  const versions = new Map<string, string>();
+  const skillsPkg = await collectPackageTree(skillsPkgDir, manifest, versions);
 
-  const skillsFiles = await collectFiles(skillsPkgDir, skillsPkgDir);
-  for (const [path, data] of Object.entries(skillsFiles)) {
-    manifest[`node_modules/skills/${path}`] = data;
-  }
-
-  const yamlFiles = await collectFiles(yamlPkgDir, yamlPkgDir);
-  for (const [path, data] of Object.entries(yamlFiles)) {
-    manifest[`node_modules/yaml/${path}`] = data;
-  }
+  console.log(
+    `Embedding skills@${skillsPkg.version} with ${versions.size - 1} runtime dependencies`
+  );
 
   const json = JSON.stringify(manifest);
   const base64 = Buffer.from(json, 'utf-8').toString('base64');
